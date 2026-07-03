@@ -131,19 +131,19 @@ const PlayerControls: React.FC = () => {
         {/* Right: bet + win rate */}
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <div className="text-[9px] text-text-secondary/40 uppercase tracking-wider font-semibold">To Call</div>
-            <div className="text-accent-yellow text-xs font-mono font-black">{toCall > 0 ? `$${toCall}` : '$0'}</div>
+            <div className="text-[10px] text-text-secondary/50 uppercase tracking-wider font-bold">To Call</div>
+            <div className="text-accent-yellow text-lg font-mono font-black">{toCall > 0 ? `$${toCall}` : '$0'}</div>
           </div>
-          <div className="w-px h-8 bg-white/10" />
+          <div className="w-px h-10 bg-white/10" />
           <div className="text-right">
-            <div className="text-[9px] text-text-secondary/40 uppercase tracking-wider font-semibold">Win Rate</div>
-            <div className={`text-xs font-black font-mono ${winColor(actionWinRates.checkCall)}`}>{actionWinRates.checkCall.toFixed(0)}%</div>
+            <div className="text-[10px] text-text-secondary/50 uppercase tracking-wider font-bold">Win Rate</div>
+            <div className={`text-lg font-black font-mono ${winColor(actionWinRates.checkCall)}`}>{actionWinRates.checkCall.toFixed(0)}%</div>
           </div>
         </div>
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-2 flex-wrap items-end">
+      <div className="flex gap-2 flex-wrap items-center">
         {/* Fold */}
         <button
           onClick={() => { playerAct('fold'); addLog('Folded'); }}
@@ -175,26 +175,15 @@ const PlayerControls: React.FC = () => {
           </button>
         ) : null}
 
-        {/* Raise */}
+        {/* Raise button - inline with others */}
         {canRaise && isMyTurn && (
-          <div className="flex flex-col gap-1.5 min-w-[130px]">
-            <button
-              onClick={() => { playerAct('raise', raiseAmount || toCall * 2); addLog(`Raised $${raiseAmount || toCall * 2}`); }}
-              className="btn-primary flex items-center gap-1.5"
-            >
-              <TrendingUp size={15} /> Raise <span className="text-[10px] text-black/40 font-mono ml-1">R</span>
-              <span className="text-[11px] font-black ml-1 text-black/70">{actionWinRates.raise.toFixed(0)}%</span>
-            </button>
-            <input
-              type="range" min={toCall * 2} max={humanPlayer.chips + humanPlayer.bet} step={5}
-              value={raiseAmount || toCall * 2} onChange={handleRaiseChange}
-              className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-gold [&::-webkit-slider-thumb]:shadow-gold-sm [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-gold-dark"
-            />
-            <div className="flex justify-between text-xs">
-              <span className="text-text-secondary/60 font-mono font-bold">${raiseAmount || toCall * 2}</span>
-              <span className="text-text-secondary/40 font-mono">~{actionWinRates.raise.toFixed(0)}% win</span>
-            </div>
-          </div>
+          <button
+            onClick={() => { playerAct('raise', raiseAmount || toCall * 2); addLog(`Raised $${raiseAmount || toCall * 2}`); }}
+            className="btn-primary flex items-center gap-1.5"
+          >
+            <TrendingUp size={15} /> Raise <span className="text-[10px] text-black/40 font-mono ml-1">R</span>
+            <span className="text-[11px] font-black ml-1 text-black/70">{actionWinRates.raise.toFixed(0)}%</span>
+          </button>
         )}
 
         {/* All In */}
@@ -208,6 +197,21 @@ const PlayerControls: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Raise slider - below buttons */}
+      {canRaise && isMyTurn && (
+        <div className="mt-2 w-[40%] min-w-[140px]">
+          <input
+            type="range" min={toCall * 2} max={humanPlayer.chips + humanPlayer.bet} step={5}
+            value={raiseAmount || toCall * 2} onChange={handleRaiseChange}
+            className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-gold"
+          />
+          <div className="flex justify-between text-xs mt-0.5">
+            <span className="text-text-secondary/60 font-mono font-bold">${raiseAmount || toCall * 2}</span>
+            <span className="text-text-secondary/40 font-mono">~{actionWinRates.raise.toFixed(0)}%</span>
+          </div>
+        </div>
+      )}
 
       {/* Quick raise + Action log */}
       <div className="flex items-center justify-between mt-3 flex-wrap gap-2">

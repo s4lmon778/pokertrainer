@@ -55,12 +55,12 @@ const PokerTable: React.FC = () => {
   if (!gameState) return null;
 
   const getPlayerPosition = (index: number, total: number) => {
-    const startAngle = -Math.PI * 0.72;
-    const endAngle = Math.PI * 0.72;
+    const startAngle = -Math.PI * 0.55;
+    const endAngle = Math.PI * 0.55;
     const angle = startAngle + (index / Math.max(total - 1, 1)) * (endAngle - startAngle);
     return {
-      x: 50 + 36 * Math.cos(angle - Math.PI / 2),
-      y: 50 + 34 * Math.sin(angle - Math.PI / 2),
+      x: 50 + 37 * Math.cos(angle - Math.PI / 2),
+      y: 50 + 35 * Math.sin(angle - Math.PI / 2),
     };
   };
 
@@ -125,16 +125,18 @@ const PokerTable: React.FC = () => {
           <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none animate-pop-in">
             {/* Confetti particles */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {Array.from({ length: 30 }).map((_, i) => (
+              {Array.from({ length: 40 }).map((_, i) => (
                 <div
                   key={i}
-                  className="absolute w-2 h-3 rounded-sm animate-confetti"
+                  className="absolute rounded-sm pointer-events-none"
                   style={{
-                    left: `${Math.random() * 100}%`,
-                    top: `-${Math.random() * 20}px`,
-                    backgroundColor: ['#d4af37','#f0d060','#ef4444','#22c55e','#3b82f6','#06b6d4','#eab308'][i % 7],
-                    animationDelay: `${Math.random() * 1.5}s`,
-                    animationDuration: `${1.5 + Math.random() * 2}s`,
+                    left: `${5 + Math.random() * 90}%`,
+                    top: '-10px',
+                    width: `${4 + Math.random() * 8}px`,
+                    height: `${6 + Math.random() * 10}px`,
+                    backgroundColor: ['#d4af37','#f0d060','#ef4444','#22c55e','#3b82f6','#06b6d4','#eab308','#f97316'][i % 8],
+                    animation: `confettiFall ${2 + Math.random() * 2.5}s ease-in ${Math.random() * 1.2}s forwards`,
+                    transform: `rotate(${Math.random() * 360}deg)`,
                   }}
                 />
               ))}
@@ -158,7 +160,11 @@ const PokerTable: React.FC = () => {
         )}
 
         {/* Human player — sits on bottom edge */}
-        <div className="absolute bottom-[2%] left-1/2 -translate-x-1/2 flex flex-col items-center z-20 transition-all duration-300 relative">
+        <div className="absolute -bottom-[3%] left-1/2 -translate-x-1/2 flex flex-col items-center z-20 transition-all duration-300">
+          {/* Winner glow ring */}
+          {isHumanWinner && (
+            <div className="absolute -inset-3 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none" />
+          )}
           <div className="flex gap-1 mb-1">
             {humanPlayer.hand.map(card => (<CardDisplay key={card.id} card={card} size="md" />))}
           </div>
@@ -167,7 +173,7 @@ const PokerTable: React.FC = () => {
             <div className="absolute inset-0 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none" />
           )}
           <div className={`rounded-2xl border-2 p-2.5 min-w-[130px] relative transition-all duration-300 ${
-            isActivePlayer ? 'border-gold bg-surface-elevated shadow-[0_4px_20px_-4px_rgba(212,175,55,0.3)] scale-105' :
+            isActivePlayer ? 'border-gold bg-surface-elevated shadow-[0_4px_20px_-4px_rgba(212,175,55,0.3)]' :
             isHumanWinner ? 'border-gold bg-surface-elevated shadow-[0_0_24px_rgba(212,175,55,0.4)]' :
             humanPlayer.actedThisRound ? 'border-gold/30 bg-surface-elevated' :
             'border-white/10 bg-surface-elevated'
@@ -221,7 +227,7 @@ const PokerTable: React.FC = () => {
               )}
               {/* Winner glow */}
               {isWinnerBot && (
-                <div className="absolute inset-0 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none" style={{ transform: 'scale(1.15)' }} />
+                <div className="absolute -inset-1 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none" />
               )}
               <div className={`rounded-2xl border-2 p-2 min-w-[95px] relative transition-all duration-300 ${
                 player.folded ? 'border-gray-600/40 opacity-40 bg-surface-elevated' :
