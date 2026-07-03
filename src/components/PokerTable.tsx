@@ -123,7 +123,23 @@ const PokerTable: React.FC = () => {
         {/* Winner overlay */}
         {winnerPlayer && (
           <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none animate-pop-in">
-            <div className="bg-black/20 rounded-3xl border border-gold/40 px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
+            {/* Confetti particles */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {Array.from({ length: 30 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-2 h-3 rounded-sm animate-confetti"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `-${Math.random() * 20}px`,
+                    backgroundColor: ['#d4af37','#f0d060','#ef4444','#22c55e','#3b82f6','#06b6d4','#eab308'][i % 7],
+                    animationDelay: `${Math.random() * 1.5}s`,
+                    animationDuration: `${1.5 + Math.random() * 2}s`,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="bg-black/50 rounded-3xl border border-gold/40 px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
               <Trophy size={40} className="text-gold mx-auto" />
               <div>
                 <div className="text-2xl font-black text-gold">
@@ -142,13 +158,17 @@ const PokerTable: React.FC = () => {
         )}
 
         {/* Human player — sits on bottom edge */}
-        <div className="absolute bottom-[2%] left-1/2 -translate-x-1/2 flex flex-col items-center z-20 transition-all duration-300">
+        <div className="absolute bottom-[2%] left-1/2 -translate-x-1/2 flex flex-col items-center z-20 transition-all duration-300 relative">
           <div className="flex gap-1 mb-1">
             {humanPlayer.hand.map(card => (<CardDisplay key={card.id} card={card} size="md" />))}
           </div>
+          {/* Winner glow ring */}
+          {isHumanWinner && (
+            <div className="absolute inset-0 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none" />
+          )}
           <div className={`rounded-2xl border-2 p-2.5 min-w-[130px] relative transition-all duration-300 ${
             isActivePlayer ? 'border-gold bg-surface-elevated shadow-[0_4px_20px_-4px_rgba(212,175,55,0.3)] scale-105' :
-            isHumanWinner ? 'border-gold bg-surface-elevated' :
+            isHumanWinner ? 'border-gold bg-surface-elevated shadow-[0_0_24px_rgba(212,175,55,0.4)]' :
             humanPlayer.actedThisRound ? 'border-gold/30 bg-surface-elevated' :
             'border-white/10 bg-surface-elevated'
           }`}>
@@ -192,12 +212,16 @@ const PokerTable: React.FC = () => {
           return (
             <div key={player.id} className="absolute z-20 transition-all duration-300 flex flex-col items-center gap-0.5" style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}>
               {/* Reveal hole cards at end of game */}
-              {showCardsAtEnd && gameState.gameOver && !player.folded && (
+              {showCardsAtEnd && gameState.gameOver && (
                 <div className="flex gap-0.5 mb-0.5">
                   {player.hand.map(card => (
                     <CardDisplay key={card.id} card={card} size="sm" />
                   ))}
                 </div>
+              )}
+              {/* Winner glow */}
+              {isWinnerBot && (
+                <div className="absolute inset-0 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none" style={{ transform: 'scale(1.15)' }} />
               )}
               <div className={`rounded-2xl border-2 p-2 min-w-[95px] relative transition-all duration-300 ${
                 player.folded ? 'border-gray-600/40 opacity-40 bg-surface-elevated' :

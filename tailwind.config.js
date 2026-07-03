@@ -64,6 +64,7 @@ export default {
         'float': 'float 3s ease-in-out infinite',
         'shimmer': 'shimmer 2s linear infinite',
         'pop-in': 'popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'confetti': 'confettiFall 2s ease-in forwards',
       },
       keyframes: {
         deal: {
@@ -105,6 +106,10 @@ export default {
         popIn: {
           '0%': { opacity: '0', transform: 'scale(0.8)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        confettiFall: {
+          '0%': { transform: 'translateY(0) rotate(0deg)', opacity: '1' },
+          '100%': { transform: 'translateY(400px) rotate(720deg)', opacity: '0' },
         },
       },
     },
