@@ -21,25 +21,40 @@ const RiskOverlay: React.FC = () => {
   const communityCount = gameState.communityCards.length;
   const opponentPenalty = activeOpponents > 1 ? Math.min(0.3, (activeOpponents - 1) * 0.1) : 0;
 
-  let equity: number;
-  if (communityCount === 0) {
-    const isPair = humanPlayer.hand.length >= 2 && humanPlayer.hand[0].rank === humanPlayer.hand[1].rank;
-    const suited = humanPlayer.hand.length >= 2 && humanPlayer.hand[0].suit === humanPlayer.hand[1].suit;
-    let preflopEquity = 0.35;
-    if (isPair) preflopEquity += 0.08;
-    if (suited) preflopEquity += 0.03;
-    preflopEquity *= (1 - opponentPenalty);
-    equity = Math.min(0.95, Math.max(0.05, preflopEquity));
+  let rawEquity: number;
+  if (communityCount === 0 && humanPlayer.hand.length >= 2) {
+    const isPair = humanPlayer.hand[0].rank === humanPlayer.hand[1].rank;
+    const suited = humanPlayer.hand[0].suit === humanPlayer.hand[1].suit;
+    const rankValues = humanPlayer.hand.map(c => {
+      const r = c.rank;
+      if (r === 'A') return 14; if (r === 'K') return 13; if (r === 'Q') return 12; if (r === 'J') return 11;
+      return parseInt(r);
+    });
+    const high = Math.max(...rankValues);
+    const low = Math.min(...rankValues);
+    const gap = high - low;
+
+    let equity = 0.35;
+    if (isPair) { equity = 0.45 + (high / 14) * 0.15; }
+    else {
+      equity = 0.25 + ((high + low) / 28) * 0.25;
+      if (suited) equity += 0.04;
+      if (gap <= 2) equity += 0.03;
+      if (high >= 13) equity += 0.03;
+    }
+    rawEquity = Math.min(0.95, Math.max(0.05, equity * (1 - opponentPenalty)));
   } else {
-    equity = Math.min(0.95, Math.max(0.05, (strengthPercent / 100) * (1 - opponentPenalty)));
+    rawEquity = Math.min(0.95, Math.max(0.05, (strengthPercent / 100) * (1 - opponentPenalty)));
   }
 
   const toCall = gameState.currentBet - humanPlayer.bet;
   const potOdds = toCall > 0 ? (toCall / (gameState.pot + toCall)) * 100 : 0;
-  const expectedValue = (equity * (gameState.pot + toCall)) - ((1 - equity) * toCall);
-  const equityPct = equity * 100;
-  const raisePct = Math.min(95, equityPct + 5);
-  const allInPct = Math.min(95, equityPct + 10);
+  const expectedValue = (rawEquity * (gameState.pot + toCall)) - ((1 - rawEquity) * toCall);
+  const equityPct = rawEquity * 100;
+  const betRatio = toCall > 0 ? toCall / Math.max(1, gameState.pot + toCall) : 0;
+  const foldEquityBonus = toCall > 0 ? Math.min(12, betRatio * 30) : 0;
+  const raisePct = Math.min(95, equityPct + foldEquityBonus);
+  const allInPct = Math.min(95, equityPct + foldEquityBonus * 3);
 
   const winColor = (pct: number) => pct >= 55 ? 'text-accent-green' : pct >= 30 ? 'text-accent-yellow' : 'text-accent-red';
   const barColor = (pct: number) => pct >= 60 ? '#22c55e' : pct >= 35 ? '#d4af37' : '#ef4444';

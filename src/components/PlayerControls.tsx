@@ -20,22 +20,52 @@ const PlayerControls: React.FC = () => {
     const human = gameState.players.find(p => !p.isBot);
     if (!human || human.folded) return { fold: 0, checkCall: 0, raise: 0, allIn: 0 };
 
-    const handEval = evaluateHand(human.hand, gameState.communityCards);
-    const strengthPct = Math.min(100, Math.max(0, (handEval.score / 9500000) * 100));
-    const cardsSeen = human.hand.length + gameState.communityCards.length;
-    const uncertaintyFactor = Math.max(0, (7 - cardsSeen) / 7);
-    const rawEquity = strengthPct / 100;
-    const equity = Math.min(0.95, Math.max(0.05, rawEquity * (1 - uncertaintyFactor * 0.4) + (0.15 * uncertaintyFactor)));
-    const phaseMultiplier: Record<string, number> = { preflop: 0.7, flop: 0.85, turn: 0.92, river: 1.0 };
-    const phaseEquity = equity * (phaseMultiplier[gameState.currentPhase] || 0.7);
+    const communityCount = gameState.communityCards.length;
+    const activeOpponents = gameState.players.filter(p => p.isBot && !p.folded && p.chips > 0).length;
+    const opponentPenalty = activeOpponents > 1 ? Math.min(0.35, (activeOpponents - 1) * 0.11) : 0;
+
+    let rawEquity: number;
+    if (communityCount === 0 && human.hand.length >= 2) {
+      // Preflop heuristics — evaluateHand returns score 0 for < 5 cards
+      const isPair = human.hand[0].rank === human.hand[1].rank;
+      const suited = human.hand[0].suit === human.hand[1].suit;
+      const rankValues = human.hand.map(c => {
+        const r = c.rank;
+        if (r === 'A') return 14; if (r === 'K') return 13; if (r === 'Q') return 12; if (r === 'J') return 11;
+        return parseInt(r);
+      });
+      const high = Math.max(...rankValues);
+      const low = Math.min(...rankValues);
+      const gap = high - low;
+
+      let equity = 0.35;
+      if (isPair) { equity = 0.45 + (high / 14) * 0.15; }
+      else {
+        equity = 0.25 + ((high + low) / 28) * 0.25;
+        if (suited) equity += 0.04;
+        if (gap <= 2) equity += 0.03;
+        if (high >= 13) equity += 0.03;
+      }
+      rawEquity = Math.min(0.95, Math.max(0.05, equity * (1 - opponentPenalty)));
+    } else {
+      const handEval = evaluateHand(human.hand, gameState.communityCards);
+      const strengthPct = Math.min(100, Math.max(0, (handEval.score / 9500000) * 100));
+      rawEquity = Math.min(0.95, Math.max(0.05, (strengthPct / 100) * (1 - opponentPenalty)));
+    }
+
+    const phaseMultiplier: Record<string, number> = { preflop: 0.75, flop: 0.88, turn: 0.94, river: 1.0 };
+    const phaseEquity = rawEquity * (phaseMultiplier[gameState.currentPhase] || 0.75);
+
     const toCall = gameState.currentBet - human.bet;
-    const foldEquityBonus = toCall > 0 ? Math.min(15, (toCall / Math.max(1, gameState.pot)) * 25) : 0;
+    const potSize = Math.max(1, gameState.pot);
+    const betRatio = toCall > 0 ? toCall / (potSize + toCall) : 0;
+    const foldEquityBonus = toCall > 0 ? Math.min(12, betRatio * 30) : 0;
 
     return {
       fold: 0,
       checkCall: phaseEquity * 100,
       raise: Math.min(95, phaseEquity * 100 + foldEquityBonus),
-      allIn: Math.min(95, phaseEquity * 100 + foldEquityBonus * 2.5),
+      allIn: Math.min(95, phaseEquity * 100 + foldEquityBonus * 3),
     };
   }, [gameState]);
 

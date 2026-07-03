@@ -19,9 +19,9 @@ interface CardDisplayProps {
 
 const CardDisplay: React.FC<CardDisplayProps> = ({ card, faceDown = false, size = 'md', className = '' }) => {
   const sizeClasses = {
-    sm: 'w-9 h-14 text-[10px]',
-    md: 'w-12 h-[4.5rem] text-xs',
-    lg: 'w-16 h-24 text-sm',
+    sm: 'w-8 h-12 md:w-9 md:h-14 text-[9px] md:text-[10px]',
+    md: 'w-10 h-16 md:w-12 md:h-[4.5rem] text-[10px] md:text-xs',
+    lg: 'w-14 h-20 md:w-16 md:h-24 text-xs md:text-sm',
   };
 
   if (faceDown) {
@@ -66,8 +66,11 @@ const PokerTable: React.FC = () => {
   const botPlayers = gameState.players.filter(p => p.isBot);
   const humanPlayer = gameState.players.find(p => !p.isBot)!;
   const isActivePlayer = gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
-  const isWinner = gameState.gameOver && gameState.winner?.playerId === humanPlayer.id;
   const humanIdx = gameState.players.findIndex(p => !p.isBot);
+  const winnerPlayer = gameState.gameOver && gameState.winner
+    ? gameState.players.find(p => p.id === gameState.winner!.playerId)
+    : null;
+  const isHumanWinner = winnerPlayer?.id === 'human';
 
   const getRoleBadge = (playerIdx: number) => {
     if (playerIdx === gameState.dealerPosition) return { label: 'D', color: 'bg-white text-black', ring: 'ring-white/30' };
@@ -77,7 +80,7 @@ const PokerTable: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: '380px' }}>
+    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)' }}>
       {/* Table */}
       <div className="absolute inset-0 rounded-[42%] bg-gradient-to-b from-table-dark via-[#0d2a18] to-table-dark border-[8px] border-[#1a3a28] shadow-[0_0_80px_-20px_rgba(0,0,0,0.7)]">
         {/* Felt */}
@@ -93,7 +96,7 @@ const PokerTable: React.FC = () => {
             <CardDisplay key={card.id} card={card} size="md" />
           ))}
           {Array.from({ length: 5 - gameState.communityCards.length }).map((_, i) => (
-            <div key={`empty-${i}`} className="w-12 h-[4.5rem] rounded-xl border-2 border-dashed border-white/[0.06] bg-white/[0.02]" />
+            <div key={`empty-${i}`} className="w-10 h-16 md:w-12 md:h-[4.5rem] rounded-xl border-2 border-dashed border-white/[0.06] bg-white/[0.02]" />
           ))}
         </div>
 
@@ -116,10 +119,24 @@ const PokerTable: React.FC = () => {
           </div>
         )}
 
-        {/* Winner */}
-        {isWinner && (
-          <div className="absolute top-[15%] left-1/2 -translate-x-1/2 bg-gold/10 backdrop-blur-md rounded-xl px-5 py-2 z-10 border border-gold/30">
-            <span className="text-gold font-bold text-sm flex items-center gap-1.5"><Trophy size={16} /> You Win!</span>
+        {/* Winner overlay */}
+        {winnerPlayer && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none animate-pop-in">
+            <div className="bg-surface-elevated/95 backdrop-blur-xl rounded-3xl border-2 border-gold shadow-[0_0_60px_rgba(212,175,55,0.3)] px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
+              <Trophy size={40} className="text-gold mx-auto" />
+              <div>
+                <div className="text-2xl font-black text-gold">
+                  {isHumanWinner ? 'You Win!' : `${winnerPlayer.name} Wins!`}
+                </div>
+                <div className="text-sm text-text-secondary font-medium mt-1">
+                  {gameState.winner?.hand.description}
+                </div>
+              </div>
+              <div className="text-3xl font-black font-mono text-gold">
+                +${gameState.pot}
+              </div>
+              <div className="text-xs text-text-secondary/50">Pot awarded</div>
+            </div>
           </div>
         )}
 
@@ -130,7 +147,7 @@ const PokerTable: React.FC = () => {
           </div>
           <div className={`rounded-2xl border-2 p-2.5 min-w-[130px] relative transition-all duration-300 ${
             isActivePlayer ? 'border-gold bg-surface-elevated shadow-[0_4px_20px_-4px_rgba(212,175,55,0.3)] scale-105' :
-            isWinner ? 'border-gold bg-surface-elevated' :
+            isHumanWinner ? 'border-gold bg-surface-elevated' :
             humanPlayer.actedThisRound ? 'border-gold/30 bg-surface-elevated' :
             'border-white/10 bg-surface-elevated'
           }`}>

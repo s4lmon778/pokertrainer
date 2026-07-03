@@ -178,14 +178,12 @@ const App: React.FC = () => {
 
         {/* Game view — sidebar layout */}
         {showGame && (
-          <div className="flex flex-col lg:flex-row gap-2">
-            {/* Left: table + controls */}
-            <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex flex-col xl:flex-row gap-1.5">
+            <div className="flex-1 min-w-0 space-y-1">
               <PokerTable />
               <PlayerControls />
             </div>
-            {/* Right: stats sidebar */}
-            <div className="w-full lg:w-72 shrink-0">
+            <div className="w-full xl:w-64 shrink-0 hidden md:block">
               <RiskOverlay />
             </div>
           </div>
