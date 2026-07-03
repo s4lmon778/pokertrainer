@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const autoPlaySpeed = useGameStore(s => s.autoPlaySpeed);
   const blinds = useGameStore(s => s.blinds);
   const currentBankroll = useGameStore(s => s.currentBankroll);
+  const startingBankroll = useGameStore(s => s.startingBankroll);
   const quitGame = useGameStore(s => s.quitGame);
 
   const botActingRef = React.useRef(false);
@@ -160,7 +161,11 @@ const App: React.FC = () => {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Coins size={14} className="text-gold" />
-                <span className={`font-mono font-bold text-base ${currentBankroll >= 1000 ? 'text-accent-green' : 'text-accent-red'}`}>${currentBankroll}</span>
+                <span className="text-text-secondary/60 text-xs uppercase tracking-wider font-semibold">Bankroll</span>
+                <span className={`font-mono font-bold text-base ${currentBankroll >= startingBankroll ? 'text-accent-green' : 'text-accent-red'}`}>${currentBankroll}</span>
+                <span className="text-[10px] text-text-secondary/40">
+                  ({currentBankroll >= startingBankroll ? '+' : ''}{currentBankroll - startingBankroll})
+                </span>
               </div>
               {gameState!.gameOver && (
                 <button onClick={handleNextHand} className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5">

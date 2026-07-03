@@ -11,7 +11,11 @@ const SettingsPanel: React.FC = () => {
   const setOpponentPersonality = useGameStore(s => s.setOpponentPersonality);
   const setTableSize = useGameStore(s => s.setTableSize);
   const setBuyIn = useGameStore(s => s.setBuyIn);
+  const startingBankroll = useGameStore(s => s.startingBankroll);
+  const setStartingBankroll = useGameStore(s => s.setStartingBankroll);
   const resetStats = useGameStore(s => s.resetStats);
+  const showCardsAtEnd = useGameStore(s => s.showCardsAtEnd);
+  const toggleShowCardsAtEnd = useGameStore(s => s.toggleShowCardsAtEnd);
   const opponentPersonality = useGameStore(s => s.opponentPersonality);
   const tableSize = useGameStore(s => s.tableSize);
   const buyIn = useGameStore(s => s.buyIn);
@@ -75,9 +79,17 @@ const SettingsPanel: React.FC = () => {
             </div>
           </div>
           <div>
-            <label className="text-xs text-text-secondary">Buy-In</label>
+            <label className="text-xs text-text-secondary">Buy-In (chips per player)</label>
             <select value={buyIn} onChange={e => setBuyIn(parseInt(e.target.value))} className="input-field mt-1">
               {[25, 50, 100, 200, 500, 1000].map(n => (
+                <option key={n} value={n}>${n}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary">Starting Bankroll</label>
+            <select value={startingBankroll} onChange={e => setStartingBankroll(parseInt(e.target.value))} className="input-field mt-1">
+              {[100, 250, 500, 1000, 2000, 5000].map(n => (
                 <option key={n} value={n}>${n}</option>
               ))}
             </select>
@@ -91,6 +103,15 @@ const SettingsPanel: React.FC = () => {
             <option value={800}>Slow (800ms)</option>
             <option value={1500}>Very Slow (1.5s)</option>
           </select>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <label className="text-xs text-text-secondary">Reveal bot cards at end</label>
+          <button
+            onClick={toggleShowCardsAtEnd}
+            className={`w-10 h-5 rounded-full transition-colors relative ${showCardsAtEnd ? 'bg-gold' : 'bg-surface-border'}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${showCardsAtEnd ? 'left-5' : 'left-0.5'}`} />
+          </button>
         </div>
       </div>
 

@@ -49,6 +49,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, faceDown = false, size 
 const PokerTable: React.FC = () => {
   const gameState = useGameStore(s => s.gameState);
   const showRiskOverlay = useGameStore(s => s.showRiskOverlay);
+  const showCardsAtEnd = useGameStore(s => s.showCardsAtEnd);
   const gamePhase = useGameStore(s => s.gamePhase);
 
   if (!gameState) return null;
@@ -122,7 +123,7 @@ const PokerTable: React.FC = () => {
         {/* Winner overlay */}
         {winnerPlayer && (
           <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none animate-pop-in">
-            <div className="bg-surface-elevated/95 backdrop-blur-xl rounded-3xl border-2 border-gold shadow-[0_0_60px_rgba(212,175,55,0.3)] px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
+            <div className="bg-surface-elevated/60 backdrop-blur-md rounded-3xl border-2 border-gold shadow-[0_0_60px_rgba(212,175,55,0.3)] px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
               <Trophy size={40} className="text-gold mx-auto" />
               <div>
                 <div className="text-2xl font-black text-gold">
@@ -189,7 +190,15 @@ const PokerTable: React.FC = () => {
           const isWinnerBot = gameState.gameOver && gameState.winner?.playerId === player.id;
 
           return (
-            <div key={player.id} className="absolute z-20 transition-all duration-300" style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}>
+            <div key={player.id} className="absolute z-20 transition-all duration-300 flex flex-col items-center gap-0.5" style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}>
+              {/* Reveal hole cards at end of game */}
+              {showCardsAtEnd && gameState.gameOver && !player.folded && (
+                <div className="flex gap-0.5 mb-0.5">
+                  {player.hand.map(card => (
+                    <CardDisplay key={card.id} card={card} size="sm" />
+                  ))}
+                </div>
+              )}
               <div className={`rounded-2xl border-2 p-2 min-w-[95px] relative transition-all duration-300 ${
                 player.folded ? 'border-gray-600/40 opacity-40 bg-surface-elevated' :
                 isWinnerBot && isTraining ? 'border-accent-cyan bg-surface-elevated' :

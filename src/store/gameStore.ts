@@ -62,12 +62,14 @@ interface GameStore {
   gameHistory: GameHistoryEntry[];
   stats: Stats;
   currentBankroll: number;
+  startingBankroll: number;
   selectedBotPersonality: BotPersonality;
   tableSize: number;
   buyIn: number;
   blinds: { small: number; big: number };
   showRiskOverlay: boolean;
   showTableTalk: boolean;
+  showCardsAtEnd: boolean;
   botEvaluations: BotEvaluationEntry[];
   autoPlaySpeed: number;
 
@@ -87,8 +89,10 @@ interface GameStore {
   setOpponentPersonality: (personality: BotPersonality) => void;
   setTableSize: (size: number) => void;
   setBuyIn: (buyIn: number) => void;
+  setStartingBankroll: (amount: number) => void;
   toggleRiskOverlay: () => void;
   toggleTableTalk: () => void;
+  toggleShowCardsAtEnd: () => void;
   resetStats: () => void;
   nextHand: () => void;
   quitGame: () => void;
@@ -135,12 +139,14 @@ export const useGameStore = create<GameStore>()(
       gameHistory: [],
       stats: { ...DEFAULT_STATS },
       currentBankroll: 1000,
+      startingBankroll: 1000,
       selectedBotPersonality: 'balanced',
       tableSize: 6,
       buyIn: 100,
       blinds: { small: 5, big: 10 },
       showRiskOverlay: true,
       showTableTalk: false,
+      showCardsAtEnd: true,
       botEvaluations: [],
       autoPlaySpeed: 400,
 
@@ -622,7 +628,7 @@ export const useGameStore = create<GameStore>()(
           ? pot
           : (stats.avgPotSize * stats.totalHands + pot) / newTotalHands;
         const newWinRate = ((stats.totalWon + (isHumanWinner ? 1 : 0)) / newTotalHands) * 100;
-        const newROI = ((newBankroll - 1000) / 1000) * 100;
+        const newROI = ((newBankroll - state.startingBankroll) / state.startingBankroll) * 100;
 
         const newStats: Stats = {
           ...stats,
@@ -691,6 +697,7 @@ export const useGameStore = create<GameStore>()(
 
       setTableSize: (size) => set({ tableSize: size }),
       setBuyIn: (buyIn) => set({ buyIn }),
+      setStartingBankroll: (amount) => set({ startingBankroll: amount }),
 
       toggleRiskOverlay: () => {
         set(state => ({ showRiskOverlay: !state.showRiskOverlay }));
@@ -700,10 +707,14 @@ export const useGameStore = create<GameStore>()(
         set(state => ({ showTableTalk: !state.showTableTalk }));
       },
 
+      toggleShowCardsAtEnd: () => {
+        set(state => ({ showCardsAtEnd: !state.showCardsAtEnd }));
+      },
+
       resetStats: () => {
         set({
           stats: { ...DEFAULT_STATS },
-          currentBankroll: 1000,
+          currentBankroll: get().startingBankroll,
           gameHistory: [],
           botEvaluations: [],
         });
@@ -744,6 +755,7 @@ export const useGameStore = create<GameStore>()(
       partialize: (state) => ({
         stats: { ...state.stats },
         currentBankroll: state.currentBankroll,
+        startingBankroll: state.startingBankroll,
         gameHistory: [...state.gameHistory],
         botEvaluations: [...state.botEvaluations],
         selectedBotPersonality: state.selectedBotPersonality,
