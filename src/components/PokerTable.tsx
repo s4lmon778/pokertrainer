@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { Card as CardType } from '../types/card';
+import { Trophy } from 'lucide-react';
 
 const SUIT_SYMBOLS: Record<string, string> = {
   hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠',
@@ -66,9 +67,20 @@ const PokerTable: React.FC = () => {
   const humanPlayer = gameState.players.find(p => !p.isBot)!;
   const isActivePlayer = gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
   const isWinner = gameState.gameOver && gameState.winner?.playerId === humanPlayer.id;
+  const humanIdx = gameState.players.findIndex(p => !p.isBot);
+  const isDealer = humanIdx === gameState.dealerPosition;
+  const isSB = humanIdx === gameState.sbPosition;
+  const isBB = humanIdx === gameState.bbPosition;
+
+  const getRoleBadge = (playerIdx: number) => {
+    if (playerIdx === gameState.dealerPosition) return { label: 'D', color: 'bg-white text-black', ring: 'ring-white/30' };
+    if (playerIdx === gameState.sbPosition) return { label: 'SB', color: 'bg-blue-500 text-white', ring: 'ring-blue-400/50' };
+    if (playerIdx === gameState.bbPosition) return { label: 'BB', color: 'bg-red-500 text-white', ring: 'ring-red-400/50' };
+    return null;
+  };
 
   return (
-    <div className="relative w-full max-w-5xl mx-auto aspect-[16/10] min-h-[380px]">
+    <div className="relative w-full mx-auto aspect-[16/10] min-h-[420px]">
       {/* Table */}
       <div className="absolute inset-0 rounded-[42%] bg-gradient-to-b from-table-dark via-[#0d2a18] to-table-dark border-[8px] border-[#1a3a28] shadow-[0_0_80px_-20px_rgba(0,0,0,0.7)]">
         {/* Felt */}
@@ -110,7 +122,7 @@ const PokerTable: React.FC = () => {
         {/* Winner */}
         {isWinner && (
           <div className="absolute top-[15%] left-1/2 -translate-x-1/2 bg-gold/10 backdrop-blur-md rounded-xl px-5 py-2 z-10 border border-gold/30">
-            <span className="text-gold font-bold text-sm">🏆 You Win!</span>
+            <span className="text-gold font-bold text-sm flex items-center gap-1.5"><Trophy size={16} /> You Win!</span>
           </div>
         )}
 
@@ -125,20 +137,27 @@ const PokerTable: React.FC = () => {
             humanPlayer.actedThisRound ? 'border-gold/30 bg-surface-elevated' :
             'border-white/10 bg-surface-elevated'
           }`}>
+            {isActivePlayer && (
+              <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-gold text-black text-[10px] font-bold px-3 py-0.5 rounded-full shadow-md whitespace-nowrap z-30">
+                YOUR TURN
+              </div>
+            )}
             {humanPlayer.actedThisRound && !humanPlayer.folded && (
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-accent-green rounded-full border-2 border-surface-elevated" />
+            )}
+            {getRoleBadge(humanIdx) && (
+              <div className={`absolute -top-2 -left-2 text-[10px] font-black px-2 py-0.5 rounded-full ring-2 ring-surface-elevated shadow-md ${getRoleBadge(humanIdx)!.color} ${getRoleBadge(humanIdx)!.ring}`}>
+                {getRoleBadge(humanIdx)!.label}
+              </div>
             )}
             <div className="flex items-center gap-2">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                 humanPlayer.folded ? 'bg-gray-600' : 'bg-gold text-black'
               }`}>Y</div>
-              <div className="flex items-center gap-2">
+              <div>
                 <span className="font-bold text-sm">You</span>
-                {isActivePlayer && (
-                  <span className="bg-gold text-black text-[10px] font-bold px-2 py-0.5 rounded-full">TURN</span>
-                )}
+                <div className="text-gold text-xs font-mono font-semibold">${humanPlayer.chips}</div>
               </div>
-              <div className="text-gold text-xs font-mono font-semibold ml-auto">${humanPlayer.chips}</div>
             </div>
             {humanPlayer.bet > 0 && (
               <div className="mt-1.5 text-center text-[11px] text-accent-yellow font-mono font-semibold bg-black/20 rounded-full px-2 py-0.5">Bet: ${humanPlayer.bet}</div>
@@ -172,6 +191,11 @@ const PokerTable: React.FC = () => {
                     isTraining ? 'bg-cyan-500' : 'bg-accent-blue'
                   }`}>
                     {isTraining ? 'T-BOT' : 'THINKING'}
+                  </div>
+                )}
+                {getRoleBadge(player.position) && (
+                  <div className={`absolute -top-2 -left-2 text-[10px] font-black px-2 py-0.5 rounded-full ring-2 ring-surface-elevated shadow-md ${getRoleBadge(player.position)!.color}`}>
+                    {getRoleBadge(player.position)!.label}
                   </div>
                 )}
                 {player.actedThisRound && !player.folded && (

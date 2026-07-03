@@ -23,25 +23,53 @@ const App: React.FC = () => {
   const quitGame = useGameStore(s => s.quitGame);
 
   const botActingRef = React.useRef(false);
+  const safetyRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isPlaying || !gameState || gameState.gameOver) {
       botActingRef.current = false;
+      if (safetyRef.current) { clearTimeout(safetyRef.current); safetyRef.current = null; }
       return;
     }
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (!currentPlayer) return;
     if (currentPlayer.isBot === false) { botActingRef.current = false; return; }
+    if (currentPlayer.folded || currentPlayer.chips <= 0) {
+      // Skip busted/folded bots — advance immediately
+      if (!botActingRef.current) {
+        botActingRef.current = true;
+        const skipTimer = setTimeout(() => {
+          advanceTurn();
+          botActingRef.current = false;
+        }, 150);
+        return () => { clearTimeout(skipTimer); botActingRef.current = false; };
+      }
+      return;
+    }
     if (currentPlayer.actedThisRound || botActingRef.current) return;
 
     botActingRef.current = true;
+
+    // Safety: force-reset ref after 8 seconds in case something hangs
+    safetyRef.current = setTimeout(() => {
+      botActingRef.current = false;
+      safetyRef.current = null;
+    }, 8000);
+
     const timer = setTimeout(async () => {
       try { await botAct(); advanceTurn(); }
-      catch (e) { console.error('botAct error:', e); }
-      finally { botActingRef.current = false; }
+      catch (e) { console.error('botAct error:', e); advanceTurn(); }
+      finally {
+        botActingRef.current = false;
+        if (safetyRef.current) { clearTimeout(safetyRef.current); safetyRef.current = null; }
+      }
     }, autoPlaySpeed);
 
-    return () => { clearTimeout(timer); botActingRef.current = false; };
+    return () => {
+      clearTimeout(timer);
+      if (safetyRef.current) { clearTimeout(safetyRef.current); safetyRef.current = null; }
+      botActingRef.current = false;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, gameState?.currentPlayerIndex, gameState?.gameOver, botAct, advanceTurn, autoPlaySpeed]);
 
@@ -55,7 +83,7 @@ const App: React.FC = () => {
   const goToTab = useCallback((tab: Tab) => setActiveTab(tab), []);
 
   const tabs = [
-    { id: 'play' as Tab, icon: Play, label: 'Table' },
+    { id: 'play' as Tab, icon: Play, label: 'Play' },
     { id: 'stats' as Tab, icon: BarChart3, label: 'Stats' },
     { id: 'rules' as Tab, icon: BookOpen, label: 'Rules' },
     { id: 'about' as Tab, icon: Info, label: 'About' },
@@ -68,7 +96,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-surface text-text-primary flex flex-col">
       {/* Header */}
       <header className="border-b border-white/5 bg-surface/95 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-2.5">
+        <div className="max-w-[1600px] mx-auto px-3 py-2">
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-amber-300 via-gold to-amber-500 rounded-full flex items-center justify-center shadow-md">
@@ -109,7 +137,7 @@ const App: React.FC = () => {
       </header>
 
       {/* Main */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-3 w-full">
+      <main className="flex-1 max-w-[1600px] mx-auto px-2 py-2 w-full">
         {/* Game Status Bar */}
         {showGame && (
           <div className="glass px-5 py-2.5 mb-3 flex items-center justify-between flex-wrap gap-3 animate-fade-in">
@@ -150,14 +178,14 @@ const App: React.FC = () => {
 
         {/* Game view — sidebar layout */}
         {showGame && (
-          <div className="flex flex-col lg:flex-row gap-3">
-            {/* Left: controls + table */}
-            <div className="flex-1 min-w-0 space-y-2">
-              <PlayerControls />
+          <div className="flex flex-col lg:flex-row gap-2">
+            {/* Left: table + controls */}
+            <div className="flex-1 min-w-0 space-y-1.5">
               <PokerTable />
+              <PlayerControls />
             </div>
             {/* Right: stats sidebar */}
-            <div className="w-full lg:w-80 shrink-0">
+            <div className="w-full lg:w-72 shrink-0">
               <RiskOverlay />
             </div>
           </div>
@@ -186,13 +214,13 @@ const LandingPage: React.FC<{ onStart: () => void; goToTab: (tab: Tab) => void }
         <Crown size={44} className="text-black" strokeWidth={1.5} />
       </div>
       <h2 className="text-4xl md:text-5xl font-black tracking-tight">
-        <span className="bg-gradient-to-r from-gold-light via-gold to-gold-dark bg-clip-text text-transparent">Poker</span>
+        <span className="text-gold">Poker</span>
         <span className="text-text-primary">Trainer</span>
       </h2>
       <p className="text-text-secondary/70 text-sm md:text-base max-w-sm mx-auto leading-relaxed">
         Practice Texas Hold'em against AI opponents. Train your custom bot, track stats, sharpen your game.
       </p>
-      <button onClick={onStart} className="btn-primary inline-flex items-center gap-2 px-10 py-3.5 rounded-2xl text-base font-bold shadow-xl shadow-gold/20 hover:shadow-gold/40 transition-all active:scale-95">
+      <button onClick={onStart} className="btn-primary inline-flex items-center gap-2 px-10 py-3.5 rounded-2xl text-base font-bold shadow-md hover:shadow-lg transition-all active:scale-[0.97]">
         <Play size={20} /> Start Playing
       </button>
     </div>
@@ -247,6 +275,24 @@ const LandingPage: React.FC<{ onStart: () => void; goToTab: (tab: Tab) => void }
 
 // --- Rules Page ---
 
+const suitColors: Record<string, string> = {
+  '♠': '#0f172a',
+  '♥': '#ef4444',
+  '♦': '#f97316',
+  '♣': '#1e293b',
+};
+
+const colorizeSuits = (text: string) => {
+  const parts = text.split(/([♠♥♦♣])/);
+  return parts.map((part, i) => {
+    const color = suitColors[part];
+    if (color) {
+      return <span key={i} style={{ color, fontWeight: 'bold' }}>{part}</span>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+};
+
 const RulesPage: React.FC = () => {
   const handRankings = [
     { rank: 1, name: 'Royal Flush', desc: 'A, K, Q, J, 10, all same suit', example: 'A♠ K♠ Q♠ J♠ 10♠', pct: '0.000154%', color: 'from-yellow-400 to-yellow-600' },
@@ -277,7 +323,7 @@ const RulesPage: React.FC = () => {
             <div key={h.rank} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-all group border border-transparent hover:border-white/5">
               <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${h.color} flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg`}>{h.rank}</div>
               <div className="flex-1 min-w-0"><div className="font-bold text-sm">{h.name}</div><div className="text-xs text-text-secondary/60">{h.desc}</div></div>
-              <div className="hidden md:block text-xs font-mono text-text-secondary/50 bg-white/5 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">{h.example}</div>
+              <div className="hidden md:block text-xs font-mono bg-white/5 px-2.5 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200">{colorizeSuits(h.example)}</div>
               <div className="text-[10px] text-text-secondary/40 font-mono shrink-0 w-16 text-right">{h.pct}</div>
             </div>
           ))}

@@ -51,7 +51,7 @@ const RiskOverlay: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-2 animate-fade-in lg:sticky lg:top-20">
+    <div className="space-y-1.5 animate-fade-in lg:sticky lg:top-16">
       {/* Win Rate */}
       <div className="card-premium text-center">
         <div className="flex items-center justify-center gap-1.5 mb-1">

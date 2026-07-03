@@ -86,10 +86,10 @@ const SettingsPanel: React.FC = () => {
         <div className="mt-3">
           <label className="text-xs text-text-secondary">Auto-Play Speed</label>
           <select value={autoPlaySpeed} onChange={e => setAutoPlaySpeed(parseInt(e.target.value))} className="input-field mt-1">
-            <option value={200}>Fast (200ms)</option>
-            <option value={500}>Normal (500ms)</option>
-            <option value={1000}>Slow (1s)</option>
-            <option value={2000}>Very Slow (2s)</option>
+            <option value={150}>Very Fast (150ms)</option>
+            <option value={400}>Normal (400ms)</option>
+            <option value={800}>Slow (800ms)</option>
+            <option value={1500}>Very Slow (1.5s)</option>
           </select>
         </div>
       </div>

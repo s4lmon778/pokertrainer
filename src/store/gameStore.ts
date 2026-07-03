@@ -142,7 +142,7 @@ export const useGameStore = create<GameStore>()(
       showRiskOverlay: true,
       showTableTalk: false,
       botEvaluations: [],
-      autoPlaySpeed: 800,
+      autoPlaySpeed: 400,
 
       initializeGame: () => {
         const { tableSize, buyIn, blinds } = get();
@@ -751,6 +751,8 @@ export const useGameStore = create<GameStore>()(
         buyIn: state.buyIn,
         blinds: { ...state.blinds },
         autoPlaySpeed: state.autoPlaySpeed,
+        isPlaying: state.isPlaying,
+        gameState: state.gameState,
         trainingBotSettings: { ...state.trainingBotSettings },
         botSettings: { ...state.botSettings },
         opponentPersonality: state.opponentPersonality,
