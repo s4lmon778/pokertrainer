@@ -1,0 +1,210 @@
+import React from 'react';
+import { useGameStore } from '../store/gameStore';
+import type { Card as CardType } from '../types/card';
+
+const SUIT_SYMBOLS: Record<string, string> = {
+  hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠',
+};
+const SUIT_COLORS: Record<string, string> = {
+  hearts: '#ef4444', diamonds: '#f97316', clubs: '#1e293b', spades: '#0f172a',
+};
+
+interface CardDisplayProps {
+  card: CardType;
+  faceDown?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+const CardDisplay: React.FC<CardDisplayProps> = ({ card, faceDown = false, size = 'md', className = '' }) => {
+  const sizeClasses = {
+    sm: 'w-9 h-14 text-[10px]',
+    md: 'w-12 h-[4.5rem] text-xs',
+    lg: 'w-16 h-24 text-sm',
+  };
+
+  if (faceDown) {
+    return (
+      <div className={`${sizeClasses[size]} bg-gradient-to-br from-indigo-950 via-indigo-900 to-indigo-950 rounded-xl border-2 border-indigo-500/40 shadow-lg flex items-center justify-center ${className}`}>
+        <div className="w-7 h-7 rounded-full bg-indigo-800/40 flex items-center justify-center border border-indigo-400/20">
+          <span className="text-indigo-300/60 text-sm">♠</span>
+        </div>
+      </div>
+    );
+  }
+
+  const suitSymbol = SUIT_SYMBOLS[card.suit] || '';
+  const suitColor = SUIT_COLORS[card.suit] || '#000';
+
+  return (
+    <div className={`${sizeClasses[size]} bg-white rounded-xl border border-gray-200 shadow-lg flex flex-col items-center justify-between p-1 animate-deal ${className} hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 cursor-default`}>
+      <div className="self-start font-bold leading-none" style={{ color: suitColor }}>{card.rank}<span className="text-[0.55em] ml-0.5">{suitSymbol}</span></div>
+      <div className="text-xl leading-none" style={{ color: suitColor }}>{suitSymbol}</div>
+      <div className="self-end font-bold rotate-180 leading-none" style={{ color: suitColor }}>{card.rank}<span className="text-[0.55em] ml-0.5">{suitSymbol}</span></div>
+    </div>
+  );
+};
+
+const PokerTable: React.FC = () => {
+  const gameState = useGameStore(s => s.gameState);
+  const showRiskOverlay = useGameStore(s => s.showRiskOverlay);
+  const gamePhase = useGameStore(s => s.gamePhase);
+
+  if (!gameState) return null;
+
+  const getPlayerPosition = (index: number, total: number) => {
+    const startAngle = -Math.PI * 0.72;
+    const endAngle = Math.PI * 0.72;
+    const angle = startAngle + (index / Math.max(total - 1, 1)) * (endAngle - startAngle);
+    return {
+      x: 50 + 36 * Math.cos(angle - Math.PI / 2),
+      y: 50 + 34 * Math.sin(angle - Math.PI / 2),
+    };
+  };
+
+  const botPlayers = gameState.players.filter(p => p.isBot);
+  const humanPlayer = gameState.players.find(p => !p.isBot)!;
+  const isActivePlayer = gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
+  const isWinner = gameState.gameOver && gameState.winner?.playerId === humanPlayer.id;
+
+  return (
+    <div className="relative w-full max-w-5xl mx-auto aspect-[16/10] min-h-[380px]">
+      {/* Table */}
+      <div className="absolute inset-0 rounded-[42%] bg-gradient-to-b from-table-dark via-[#0d2a18] to-table-dark border-[8px] border-[#1a3a28] shadow-[0_0_80px_-20px_rgba(0,0,0,0.7)]">
+        {/* Felt */}
+        <div className="absolute inset-2 rounded-[40%] bg-felt-gradient" />
+        {/* Texture */}
+        <div className="absolute inset-2 rounded-[40%] bg-table-texture opacity-25" />
+        {/* Shine */}
+        <div className="absolute inset-2 rounded-[40%] bg-felt-shine" />
+
+        {/* Community cards */}
+        <div className="absolute top-[36%] left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+          {gameState.communityCards.map(card => (
+            <CardDisplay key={card.id} card={card} size="md" />
+          ))}
+          {Array.from({ length: 5 - gameState.communityCards.length }).map((_, i) => (
+            <div key={`empty-${i}`} className="w-12 h-[4.5rem] rounded-xl border-2 border-dashed border-white/[0.06] bg-white/[0.02]" />
+          ))}
+        </div>
+
+        {/* Pot */}
+        <div className="absolute top-[28%] left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md rounded-full px-5 py-1.5 z-10 border border-white/10">
+          <span className="text-gold font-bold text-sm">Pot: ${gameState.pot}</span>
+        </div>
+
+        {/* Phase badge */}
+        {showRiskOverlay && (
+          <div className="absolute top-[18%] left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md rounded-lg px-3 py-1 z-10 text-center border border-white/10">
+            <span className="text-[9px] text-text-secondary/60 uppercase tracking-wider font-semibold">{gamePhase}</span>
+          </div>
+        )}
+
+        {/* Last action */}
+        {gameState.lastAction && (
+          <div className="absolute bottom-[28%] left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-md rounded-full px-4 py-1 z-10 animate-slide-up border border-white/10">
+            <span className="text-text-secondary/70 text-xs font-medium">{gameState.lastAction}</span>
+          </div>
+        )}
+
+        {/* Winner */}
+        {isWinner && (
+          <div className="absolute top-[15%] left-1/2 -translate-x-1/2 bg-gold/10 backdrop-blur-md rounded-xl px-5 py-2 z-10 border border-gold/30">
+            <span className="text-gold font-bold text-sm">🏆 You Win!</span>
+          </div>
+        )}
+
+        {/* Human player — sits on bottom edge */}
+        <div className="absolute bottom-[2%] left-1/2 -translate-x-1/2 flex flex-col items-center z-20 transition-all duration-300">
+          <div className="flex gap-1 mb-1">
+            {humanPlayer.hand.map(card => (<CardDisplay key={card.id} card={card} size="md" />))}
+          </div>
+          <div className={`rounded-2xl border-2 p-2.5 min-w-[130px] relative transition-all duration-300 ${
+            isActivePlayer ? 'border-gold bg-surface-elevated shadow-[0_4px_20px_-4px_rgba(212,175,55,0.3)] scale-105' :
+            isWinner ? 'border-gold bg-surface-elevated' :
+            humanPlayer.actedThisRound ? 'border-gold/30 bg-surface-elevated' :
+            'border-white/10 bg-surface-elevated'
+          }`}>
+            {humanPlayer.actedThisRound && !humanPlayer.folded && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-accent-green rounded-full border-2 border-surface-elevated" />
+            )}
+            <div className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                humanPlayer.folded ? 'bg-gray-600' : 'bg-gold text-black'
+              }`}>Y</div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm">You</span>
+                {isActivePlayer && (
+                  <span className="bg-gold text-black text-[10px] font-bold px-2 py-0.5 rounded-full">TURN</span>
+                )}
+              </div>
+              <div className="text-gold text-xs font-mono font-semibold ml-auto">${humanPlayer.chips}</div>
+            </div>
+            {humanPlayer.bet > 0 && (
+              <div className="mt-1.5 text-center text-[11px] text-accent-yellow font-mono font-semibold bg-black/20 rounded-full px-2 py-0.5">Bet: ${humanPlayer.bet}</div>
+            )}
+            {humanPlayer.folded && <div className="mt-1 text-center text-[11px] text-text-secondary/50 font-semibold">Folded</div>}
+            {humanPlayer.chips === 0 && !humanPlayer.folded && <div className="mt-1 text-center text-[11px] text-accent-red font-bold">ALL IN</div>}
+          </div>
+        </div>
+
+        {/* Bot players */}
+        {botPlayers.map((player, idx) => {
+          const pos = getPlayerPosition(idx, botPlayers.length);
+          const isTraining = player.isTrainingBot === true;
+          const isCurrent = gameState.players[gameState.currentPlayerIndex]?.id === player.id && !gameState.gameOver;
+          const isWinnerBot = gameState.gameOver && gameState.winner?.playerId === player.id;
+
+          return (
+            <div key={player.id} className="absolute z-20 transition-all duration-300" style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}>
+              <div className={`rounded-2xl border-2 p-2 min-w-[95px] relative transition-all duration-300 ${
+                player.folded ? 'border-gray-600/40 opacity-40 bg-surface-elevated' :
+                isWinnerBot && isTraining ? 'border-accent-cyan bg-surface-elevated' :
+                isWinnerBot ? 'border-gold bg-surface-elevated' :
+                isCurrent && isTraining ? 'border-accent-cyan bg-surface-elevated' :
+                isCurrent ? 'border-gold bg-surface-elevated' :
+                player.actedThisRound ? 'border-gold/30 bg-surface-elevated' :
+                isTraining ? 'border-accent-cyan/30 bg-surface-elevated' :
+                'border-white/10 bg-surface-elevated'
+              }`}>
+                {isCurrent && (
+                  <div className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-md ${
+                    isTraining ? 'bg-cyan-500' : 'bg-accent-blue'
+                  }`}>
+                    {isTraining ? 'T-BOT' : 'THINKING'}
+                  </div>
+                )}
+                {player.actedThisRound && !player.folded && (
+                  <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-surface-elevated ${isTraining ? 'bg-accent-cyan' : 'bg-accent-green'}`} />
+                )}
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    player.folded ? 'bg-gray-600' :
+                    isTraining ? 'bg-cyan-500 text-white' :
+                    'bg-gold text-black'
+                  }`}>
+                    {player.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-xs">{player.name}</span>
+                      {isTraining && <span className="text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold uppercase">TRAIN</span>}
+                    </div>
+                    <div className={`text-xs font-mono font-semibold ${isTraining ? 'text-cyan-400' : 'text-gold'}`}>${player.chips}</div>
+                  </div>
+                </div>
+                {player.bet > 0 && (
+                  <div className="mt-1 bg-black/30 rounded-full text-[9px] text-text-secondary/70 text-center px-2 py-0.5">Bet: ${player.bet}</div>
+                )}
+                {player.folded && <div className="mt-1 text-[9px] text-text-secondary/30 text-center font-semibold">Folded</div>}
+                {player.chips === 0 && !player.folded && <div className="mt-1 text-[9px] text-accent-red text-center font-bold">ALL IN</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export default PokerTable;
