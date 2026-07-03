@@ -4,7 +4,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/pokertrainer/',
+  base: process.env.NODE_ENV === 'production' ? '/pokertrainer/' : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

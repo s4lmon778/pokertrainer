@@ -77,7 +77,7 @@ const PokerTable: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full mx-auto aspect-[16/10] min-h-[420px]">
+    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: '380px' }}>
       {/* Table */}
       <div className="absolute inset-0 rounded-[42%] bg-gradient-to-b from-table-dark via-[#0d2a18] to-table-dark border-[8px] border-[#1a3a28] shadow-[0_0_80px_-20px_rgba(0,0,0,0.7)]">
         {/* Felt */}
