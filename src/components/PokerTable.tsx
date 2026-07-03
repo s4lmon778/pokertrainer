@@ -68,9 +68,6 @@ const PokerTable: React.FC = () => {
   const isActivePlayer = gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
   const isWinner = gameState.gameOver && gameState.winner?.playerId === humanPlayer.id;
   const humanIdx = gameState.players.findIndex(p => !p.isBot);
-  const isDealer = humanIdx === gameState.dealerPosition;
-  const isSB = humanIdx === gameState.sbPosition;
-  const isBB = humanIdx === gameState.bbPosition;
 
   const getRoleBadge = (playerIdx: number) => {
     if (playerIdx === gameState.dealerPosition) return { label: 'D', color: 'bg-white text-black', ring: 'ring-white/30' };
