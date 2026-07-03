@@ -40,6 +40,15 @@ interface Stats {
   accuracyByPhase: Record<GamePhase, { correct: number; total: number }>;
 }
 
+interface TBotStats {
+  handsPlayed: number;
+  handsWon: number;
+  handsLost: number;
+  winRate: number;
+  totalProfit: number;
+  bankrollHistory: number[];
+}
+
 interface BotEvaluationEntry {
   handNumber: number;
   phase: GamePhase;
@@ -61,6 +70,7 @@ interface GameStore {
   opponentPersonality: BotPersonality;
   gameHistory: GameHistoryEntry[];
   stats: Stats;
+  tbotStats: TBotStats;
   currentBankroll: number;
   startingBankroll: number;
   selectedBotPersonality: BotPersonality;
@@ -70,6 +80,7 @@ interface GameStore {
   showRiskOverlay: boolean;
   showTableTalk: boolean;
   showCardsAtEnd: boolean;
+  autoPlayMode: boolean;
   botEvaluations: BotEvaluationEntry[];
   autoPlaySpeed: number;
 
@@ -93,6 +104,7 @@ interface GameStore {
   toggleRiskOverlay: () => void;
   toggleTableTalk: () => void;
   toggleShowCardsAtEnd: () => void;
+  toggleAutoPlayMode: () => void;
   resetStats: () => void;
   nextHand: () => void;
   quitGame: () => void;
@@ -138,6 +150,7 @@ export const useGameStore = create<GameStore>()(
       opponentPersonality: 'balanced' as BotPersonality,
       gameHistory: [],
       stats: { ...DEFAULT_STATS },
+      tbotStats: { handsPlayed: 0, handsWon: 0, handsLost: 0, winRate: 0, totalProfit: 0, bankrollHistory: [] },
       currentBankroll: 1000,
       startingBankroll: 1000,
       selectedBotPersonality: 'balanced',
@@ -147,6 +160,7 @@ export const useGameStore = create<GameStore>()(
       showRiskOverlay: true,
       showTableTalk: false,
       showCardsAtEnd: true,
+      autoPlayMode: false,
       botEvaluations: [],
       autoPlaySpeed: 400,
 
@@ -646,6 +660,22 @@ export const useGameStore = create<GameStore>()(
           bankrollHistory: [...stats.bankrollHistory, newBankroll],
         };
 
+        // Track training bot stats
+        const tbotPlayer = gameState.players.find(p => p.id === 'training-bot');
+        const tbotBet = tbotPlayer?.totalBetThisRound || 0;
+        const isTbotWinner = winnerId === 'training-bot';
+        const tbotProfit = isTbotWinner ? (pot - tbotBet) : -tbotBet;
+        const prevTbot = state.tbotStats;
+        const newTbotHands = prevTbot.handsPlayed + 1;
+        const newTbotStats: TBotStats = {
+          handsPlayed: newTbotHands,
+          handsWon: prevTbot.handsWon + (isTbotWinner ? 1 : 0),
+          handsLost: prevTbot.handsLost + (isTbotWinner ? 0 : 1),
+          winRate: ((prevTbot.handsWon + (isTbotWinner ? 1 : 0)) / newTbotHands) * 100,
+          totalProfit: prevTbot.totalProfit + tbotProfit,
+          bankrollHistory: [...prevTbot.bankrollHistory, prevTbot.totalProfit + tbotProfit],
+        };
+
         const historyEntry: GameHistoryEntry = {
           handNumber: gameState.handNumber,
           winner: players.find(p => p.id === winnerId)?.name || winnerId,
@@ -662,6 +692,7 @@ export const useGameStore = create<GameStore>()(
 
         set({
           stats: newStats,
+          tbotStats: newTbotStats,
           gameHistory: [...state.gameHistory, historyEntry],
           currentBankroll: newBankroll,
           gameState: { ...gameState, players },
@@ -711,6 +742,10 @@ export const useGameStore = create<GameStore>()(
         set(state => ({ showCardsAtEnd: !state.showCardsAtEnd }));
       },
 
+      toggleAutoPlayMode: () => {
+        set(state => ({ autoPlayMode: !state.autoPlayMode }));
+      },
+
       resetStats: () => {
         set({
           stats: { ...DEFAULT_STATS },
@@ -754,6 +789,7 @@ export const useGameStore = create<GameStore>()(
       name: 'pokerbot-arena-storage',
       partialize: (state) => ({
         stats: { ...state.stats },
+        tbotStats: { ...state.tbotStats, bankrollHistory: [...state.tbotStats.bankrollHistory] },
         currentBankroll: state.currentBankroll,
         startingBankroll: state.startingBankroll,
         gameHistory: [...state.gameHistory],

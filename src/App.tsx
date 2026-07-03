@@ -21,6 +21,8 @@ const App: React.FC = () => {
   const blinds = useGameStore(s => s.blinds);
   const currentBankroll = useGameStore(s => s.currentBankroll);
   const startingBankroll = useGameStore(s => s.startingBankroll);
+  const autoPlayMode = useGameStore(s => s.autoPlayMode);
+  const toggleAutoPlayMode = useGameStore(s => s.toggleAutoPlayMode);
   const quitGame = useGameStore(s => s.quitGame);
 
   const botActingRef = React.useRef(false);
@@ -34,7 +36,11 @@ const App: React.FC = () => {
     }
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (!currentPlayer) return;
-    if (currentPlayer.isBot === false) { botActingRef.current = false; return; }
+    // Human turn — wait for input unless autoPlayMode is on
+    if (currentPlayer.isBot === false) {
+      if (!autoPlayMode) { botActingRef.current = false; return; }
+      // Auto-play: human's hand played by bot logic
+    }
     if (currentPlayer.folded || currentPlayer.chips <= 0) {
       // Skip busted/folded bots — advance immediately
       if (!botActingRef.current) {
@@ -72,7 +78,7 @@ const App: React.FC = () => {
       botActingRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, gameState?.currentPlayerIndex, gameState?.gameOver, botAct, advanceTurn, autoPlaySpeed]);
+  }, [isPlaying, gameState?.currentPlayerIndex, gameState?.gameOver, botAct, advanceTurn, autoPlaySpeed, autoPlayMode]);
 
   const handleStartGame = useCallback(() => {
     initializeGame();
@@ -158,12 +164,21 @@ const App: React.FC = () => {
                 <span className="px-2 py-0.5 rounded-full bg-gold/20 text-gold font-bold text-xs uppercase tracking-wider border border-gold/30">{gameState!.currentPhase}</span>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleAutoPlayMode}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                  autoPlayMode ? 'bg-cyan-500 text-white' : 'bg-white/10 text-text-secondary/50 hover:text-text-primary'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${autoPlayMode ? 'bg-white animate-pulse' : 'bg-text-secondary/30'}`} />
+                AUTO
+              </button>
               <div className="flex items-center gap-2">
                 <Coins size={14} className="text-gold" />
                 <span className="text-text-secondary/60 text-xs uppercase tracking-wider font-semibold">Bankroll</span>
                 <span className={`font-mono font-bold text-base ${currentBankroll >= startingBankroll ? 'text-accent-green' : 'text-accent-red'}`}>${currentBankroll}</span>
-                <span className="text-[10px] text-text-secondary/40">
+                <span className="text-[10px] text-text-secondary/40 hidden sm:inline">
                   ({currentBankroll >= startingBankroll ? '+' : ''}{currentBankroll - startingBankroll})
                 </span>
               </div>

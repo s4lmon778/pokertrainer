@@ -73,6 +73,9 @@
            focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30
            transition-all text-sm;
   }
+  .input-field option {
+    @apply bg-surface-elevated text-text-primary;
+  }
 
   /* Animated card deal */
   .animate-deal {

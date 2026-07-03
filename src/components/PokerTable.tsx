@@ -123,7 +123,7 @@ const PokerTable: React.FC = () => {
         {/* Winner overlay */}
         {winnerPlayer && (
           <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none animate-pop-in">
-            <div className="bg-surface-elevated/60 backdrop-blur-md rounded-3xl border-2 border-gold shadow-[0_0_60px_rgba(212,175,55,0.3)] px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
+            <div className="bg-black/20 rounded-3xl border border-gold/40 px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
               <Trophy size={40} className="text-gold mx-auto" />
               <div>
                 <div className="text-2xl font-black text-gold">

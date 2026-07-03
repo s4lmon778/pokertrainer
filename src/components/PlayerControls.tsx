@@ -117,28 +117,29 @@ const PlayerControls: React.FC = () => {
   const winBg = (pct: number) => pct >= 55 ? 'bg-accent-green/15 border-accent-green/30' : pct >= 30 ? 'bg-accent-yellow/15 border-accent-yellow/30' : 'bg-accent-red/15 border-accent-red/30';
 
   return (
-    <div className="glass p-4 mt-1 animate-fade-in">
+    <div className="glass p-2.5 animate-fade-in">
       {/* Status row */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-4">
-          {/* Turn indicator */}
-          <div className={`flex items-center gap-2 ${isMyTurn ? 'text-gold' : 'text-text-secondary/50'}`}>
-            <div className={`w-2.5 h-2.5 rounded-full ${isMyTurn ? 'bg-gold animate-pulse-glow-fast shadow-[0_0_8px_rgba(212,175,55,0.6)]' : 'bg-text-secondary/30'}`} />
-            <span className="text-sm font-bold">{isMyTurn ? 'Your Turn' : 'Waiting'}</span>
+      <div className="flex items-center justify-between mb-2">
+        {/* Left: turn + chips */}
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 ${isMyTurn ? 'text-gold' : 'text-text-secondary/50'}`}>
+            <div className={`w-2 h-2 rounded-full ${isMyTurn ? 'bg-gold animate-pulse' : 'bg-text-secondary/30'}`} />
+            <span className="text-xs font-bold">{isMyTurn ? 'Your Turn' : 'Waiting'}</span>
           </div>
-          {/* Chips */}
-          <span className="text-text-secondary text-xs font-mono font-bold bg-white/5 rounded-full px-3 py-1 border border-white/5">${humanPlayer.chips}</span>
-          {/* Live hand win rate */}
-          <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${winBg(actionWinRates.checkCall)}`}>
-            <Target size={11} />
-            <span className={winColor(actionWinRates.checkCall)}>{actionWinRates.checkCall.toFixed(0)}%</span>
+          <span className="text-text-secondary/60 text-[10px] font-mono font-semibold bg-white/5 rounded-full px-2 py-0.5 border border-white/5">Chips ${humanPlayer.chips}</span>
+        </div>
+        {/* Right: bet + win rate */}
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-[9px] text-text-secondary/40 uppercase tracking-wider font-semibold">To Call</div>
+            <div className="text-accent-yellow text-xs font-mono font-black">{toCall > 0 ? `$${toCall}` : '$0'}</div>
+          </div>
+          <div className="w-px h-8 bg-white/10" />
+          <div className="text-right">
+            <div className="text-[9px] text-text-secondary/40 uppercase tracking-wider font-semibold">Win Rate</div>
+            <div className={`text-xs font-black font-mono ${winColor(actionWinRates.checkCall)}`}>{actionWinRates.checkCall.toFixed(0)}%</div>
           </div>
         </div>
-        {toCall > 0 && (
-          <span className="text-accent-yellow text-xs font-mono font-black bg-accent-yellow/10 rounded-full px-3 py-1 border border-accent-yellow/20">
-            To call: ${toCall}
-          </span>
-        )}
       </div>
 
       {/* Action buttons */}
