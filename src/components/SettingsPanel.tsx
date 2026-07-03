@@ -56,65 +56,57 @@ const SettingsPanel: React.FC = () => {
           <Users size={16} className="text-gold" />
           <span className="font-medium">Table Setup</span>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
           <div>
-            <label className="text-xs text-text-secondary">Total Bots (1 Training + others)</label>
-            <div className="flex items-center gap-2 mt-1">
-              <button
-                onClick={() => handleNumBotsChange(-1)}
-                disabled={numBots <= 2}
-                className="w-7 h-7 rounded-lg bg-surface border border-surface-border flex items-center justify-center hover:border-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
+            <label className="text-xs text-text-secondary mb-1 block">Bots (1 Training + opponents)</label>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => handleNumBotsChange(-1)} disabled={numBots <= 2}
+                className="w-7 h-7 rounded-lg bg-surface border border-surface-border flex items-center justify-center hover:border-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                 <Minus size={14} />
               </button>
-              <span className="text-lg font-bold text-gold font-mono w-8 text-center">{numBots}</span>
-              <button
-                onClick={() => handleNumBotsChange(1)}
-                disabled={numBots >= 8}
-                className="w-7 h-7 rounded-lg bg-surface border border-surface-border flex items-center justify-center hover:border-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
+              <span className="text-base font-bold text-gold font-mono w-7 text-center">{numBots}</span>
+              <button onClick={() => handleNumBotsChange(1)} disabled={numBots >= 8}
+                className="w-7 h-7 rounded-lg bg-surface border border-surface-border flex items-center justify-center hover:border-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                 <Plus size={14} />
               </button>
-              <span className="text-xs text-text-secondary">({numBots + 1} total)</span>
+              <span className="text-[10px] text-text-secondary/50">({numBots + 1}p)</span>
             </div>
           </div>
           <div>
-            <label className="text-xs text-text-secondary">Buy-In (chips per player)</label>
-            <select value={buyIn} onChange={e => setBuyIn(parseInt(e.target.value))} className="input-field mt-1">
-              {[25, 50, 100, 200, 500, 1000].map(n => (
-                <option key={n} value={n}>${n}</option>
-              ))}
+            <label className="text-xs text-text-secondary mb-1 block">Buy-In</label>
+            <select value={buyIn} onChange={e => setBuyIn(parseInt(e.target.value))} className="input-field">
+              {[25, 50, 100, 200, 500, 1000].map(n => (<option key={n} value={n}>${n}</option>))}
             </select>
           </div>
           <div>
-            <label className="text-xs text-text-secondary">Starting Bankroll</label>
-            <select value={startingBankroll} onChange={e => setStartingBankroll(parseInt(e.target.value))} className="input-field mt-1">
-              {[100, 250, 500, 1000, 2000, 5000].map(n => (
-                <option key={n} value={n}>${n}</option>
-              ))}
+            <label className="text-xs text-text-secondary mb-1 block">Starting Bankroll</label>
+            <select value={startingBankroll} onChange={e => setStartingBankroll(parseInt(e.target.value))} className="input-field">
+              {[100, 250, 500, 1000, 2000, 5000].map(n => (<option key={n} value={n}>${n}</option>))}
             </select>
           </div>
         </div>
-        <div className="mt-3">
-          <label className="text-xs text-text-secondary">Auto-Play Speed</label>
-          <select value={autoPlaySpeed} onChange={e => setAutoPlaySpeed(parseInt(e.target.value))} className="input-field mt-1">
-            <option value={150}>Very Fast (150ms)</option>
-            <option value={400}>Normal (400ms)</option>
-            <option value={800}>Slow (800ms)</option>
-            <option value={1500}>Very Slow (1.5s)</option>
-          </select>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <label className="text-xs text-text-secondary">Reveal bot cards at end</label>
-          <button
-            onClick={toggleShowCardsAtEnd}
-            className={`w-10 h-5 rounded-full transition-colors relative ${showCardsAtEnd ? 'bg-gold' : 'bg-surface-border'}`}
-          >
-            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${showCardsAtEnd ? 'left-5' : 'left-0.5'}`} />
-          </button>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-text-secondary mb-1 block">Auto-Play Speed</label>
+            <select value={autoPlaySpeed} onChange={e => setAutoPlaySpeed(parseInt(e.target.value))} className="input-field">
+              <option value={150}>Very Fast (150ms)</option>
+              <option value={400}>Normal (400ms)</option>
+              <option value={800}>Slow (800ms)</option>
+              <option value={1500}>Very Slow (1.5s)</option>
+            </select>
+          </div>
+          <div className="flex items-end justify-between pb-2">
+            <label className="text-xs text-text-secondary">Reveal bot cards at end</label>
+            <button onClick={toggleShowCardsAtEnd}
+              className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${showCardsAtEnd ? 'bg-gold' : 'bg-surface-border'}`}>
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${showCardsAtEnd ? 'left-5' : 'left-0.5'}`} />
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* ===== TRAINING BOT + OPPONENT BOTS ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* ===== TRAINING BOT ===== */}
       <div className="card border-cyan-500/20 bg-gradient-to-br from-cyan-950/20 to-surface-elevated">
         <div className="flex items-center gap-2 mb-1">
@@ -247,6 +239,7 @@ const SettingsPanel: React.FC = () => {
             <div className="text-gold font-mono text-sm font-bold">{(botSettings.mistakeRate * 100).toFixed(0)}%</div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Reset */}

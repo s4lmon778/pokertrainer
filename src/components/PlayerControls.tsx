@@ -8,6 +8,7 @@ const PlayerControls: React.FC = () => {
   const playerAct = useGameStore(s => s.playerAct);
   const nextHand = useGameStore(s => s.nextHand);
   const isPlaying = useGameStore(s => s.isPlaying);
+  const autoPlayMode = useGameStore(s => s.autoPlayMode);
   const [raiseAmount, setRaiseAmount] = useState(0);
   const [actionLog, setActionLog] = useState<string[]>([]);
 
@@ -90,6 +91,18 @@ const PlayerControls: React.FC = () => {
   }, [gameState, isPlaying, playerAct, addLog]);
 
   if (!gameState) return null;
+
+  if (autoPlayMode) {
+    return (
+      <div className="glass p-2 text-center animate-fade-in">
+        <div className="flex items-center justify-center gap-2 text-sm">
+          <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+          <span className="text-cyan-400 font-bold">Auto-Play Active</span>
+          <span className="text-text-secondary/50 text-xs">T-Bot playing as you</span>
+        </div>
+      </div>
+    );
+  }
 
   if (gameState.gameOver) {
     return (

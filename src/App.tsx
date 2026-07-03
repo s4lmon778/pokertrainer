@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const startingBankroll = useGameStore(s => s.startingBankroll);
   const autoPlayMode = useGameStore(s => s.autoPlayMode);
   const toggleAutoPlayMode = useGameStore(s => s.toggleAutoPlayMode);
+  const tbotActivity = useGameStore(s => s.tbotActivity);
   const quitGame = useGameStore(s => s.quitGame);
 
   const botActingRef = React.useRef(false);
@@ -39,16 +40,14 @@ const App: React.FC = () => {
     // Human turn — wait for input unless autoPlayMode is on
     if (currentPlayer.isBot === false) {
       if (!autoPlayMode) { botActingRef.current = false; return; }
-      // Auto-play: human's hand played by bot logic
     }
     if (currentPlayer.folded || currentPlayer.chips <= 0) {
-      // Skip busted/folded bots — advance immediately
       if (!botActingRef.current) {
         botActingRef.current = true;
         const skipTimer = setTimeout(() => {
-          advanceTurn();
+          try { advanceTurn(); } catch (e) { console.error('skip error:', e); }
           botActingRef.current = false;
-        }, 150);
+        }, 100);
         return () => { clearTimeout(skipTimer); botActingRef.current = false; };
       }
       return;
@@ -57,11 +56,13 @@ const App: React.FC = () => {
 
     botActingRef.current = true;
 
-    // Safety: force-reset ref after 8 seconds in case something hangs
+    // Safety: force-advance if stuck for 4 seconds
     safetyRef.current = setTimeout(() => {
+      console.warn('bot safety: forcing advance');
+      try { advanceTurn(); } catch (e) { console.error('safety error:', e); }
       botActingRef.current = false;
       safetyRef.current = null;
-    }, 8000);
+    }, 4000);
 
     const timer = setTimeout(async () => {
       try { await botAct(); advanceTurn(); }
@@ -86,6 +87,13 @@ const App: React.FC = () => {
   }, [initializeGame, startHand]);
 
   const handleNextHand = useCallback(() => startHand(), [startHand]);
+
+  // Auto-advance to next hand in auto-play mode when game is over
+  useEffect(() => {
+    if (!autoPlayMode || !gameState?.gameOver || !isPlaying) return;
+    const timer = setTimeout(() => startHand(), 2000);
+    return () => clearTimeout(timer);
+  }, [autoPlayMode, gameState?.gameOver, isPlaying, startHand]);
 
   const goToTab = useCallback((tab: Tab) => setActiveTab(tab), []);
 
@@ -188,6 +196,19 @@ const App: React.FC = () => {
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* T-Bot decision status */}
+        {showGame && tbotActivity && (
+          <div className="flex items-center gap-2 px-3 py-1 mb-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-xs animate-fade-in">
+            <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse shrink-0" />
+            <span className="text-cyan-400 font-bold shrink-0">T-Bot</span>
+            <span className="text-text-secondary/70">{tbotActivity.reasoning}</span>
+            {tbotActivity.isBluff && (
+              <span className="text-accent-yellow font-bold text-[10px] px-1.5 py-0.5 rounded bg-accent-yellow/10 border border-accent-yellow/20 shrink-0">BLUFF</span>
+            )}
+            <span className="text-text-secondary/30 text-[10px] ml-auto shrink-0">conf: {(tbotActivity.confidence * 100).toFixed(0)}%</span>
           </div>
         )}
 
@@ -335,17 +356,50 @@ const RulesPage: React.FC = () => {
       </div>
 
       <div className="card-premium">
-        <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Trophy size={18} className="text-gold" /> Hand Rankings</h3>
-        <div className="space-y-1">
-          {handRankings.map(h => (
-            <div key={h.rank} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-all group border border-transparent hover:border-white/5">
-              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${h.color} flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg`}>{h.rank}</div>
-              <div className="flex-1 min-w-0"><div className="font-bold text-sm">{h.name}</div><div className="text-xs text-text-secondary/60">{h.desc}</div></div>
-              <div className="hidden md:block text-xs font-mono bg-white/5 px-2.5 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200">{colorizeSuits(h.example)}</div>
-              <div className="text-[10px] text-text-secondary/40 font-mono shrink-0 w-16 text-right">{h.pct}</div>
-            </div>
-          ))}
+        <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Trophy size={18} className="text-gold" /> Hand Rankings Chart</h3>
+        <div className="space-y-2">
+          {handRankings.map(h => {
+            const cards = h.example.split(' ');
+            return (
+              <div key={h.rank} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-all group border border-transparent hover:border-white/5">
+                {/* Rank number */}
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${h.color} flex items-center justify-center text-white font-black text-xs shrink-0 shadow-lg`}>{h.rank}</div>
+                {/* Cards visualization */}
+                <div className="flex gap-1 shrink-0">
+                  {cards.map((card, i) => {
+                    const rank = card.slice(0, -1);
+                    const suit = card.slice(-1);
+                    const suitColor = suit === '♥' || suit === '♦' ? (suit === '♥' ? '#ef4444' : '#f97316') : (suit === '♠' ? '#0f172a' : '#1e293b');
+                    return (
+                      <div key={i} className="w-9 h-12 sm:w-10 sm:h-14 bg-white rounded-lg border border-gray-200 shadow flex flex-col items-center justify-between p-0.5">
+                        <div className="text-[9px] sm:text-[10px] font-bold leading-none" style={{ color: suitColor }}>{rank}<span className="text-[0.5em]">{suit}</span></div>
+                        <div className="text-sm sm:text-base leading-none" style={{ color: suitColor }}>{suit}</div>
+                        <div className="text-[9px] sm:text-[10px] font-bold leading-none rotate-180" style={{ color: suitColor }}>{rank}<span className="text-[0.5em]">{suit}</span></div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm">{h.name}</div>
+                  <div className="text-[11px] text-text-secondary/50">{h.desc}</div>
+                </div>
+                {/* Probability */}
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-black font-mono text-gold">{h.pct}</div>
+                  <div className="text-[10px] text-text-secondary/40">probability</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
+      </div>
+
+      {/* Preflop Starting Hands Matrix */}
+      <div className="card-premium overflow-x-auto">
+        <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Zap size={18} className="text-gold" /> Preflop Starting Hands</h3>
+        <p className="text-xs text-text-secondary/60 mb-4">Color-coded matrix of all 169 starting hands. Pairs on diagonal, suited above, offsuit below. Green = premium, red = weak.</p>
+        <StartingHandsMatrix />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -416,6 +470,125 @@ const AboutPage: React.FC = () => (
           <div key={k} className="space-y-0.5"><div className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-semibold">{k}</div><div className="text-text-primary font-semibold">{v}</div></div>
         ))}
       </div>
+    </div>
+  </div>
+);
+
+// --- Preflop Starting Hands Matrix ---
+
+const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+
+// Standard 169-hand ranking by percentile of 1326 combos
+const HAND_RANKINGS_169: Record<string, number> = {
+  'AA':1,'KK':2,'QQ':3,'AKs':4,'JJ':5,'AQs':6,'KQs':7,'AJs':8,'KJs':9,'TT':10,
+  'AKo':11,'ATs':12,'QJs':13,'KTs':14,'QTs':15,'JTs':16,'99':17,'AQo':18,'A9s':19,'KQo':20,
+  '88':21,'K9s':22,'T9s':23,'A8s':24,'Q9s':25,'J9s':26,'AJo':27,'A5s':28,'77':29,'A7s':30,
+  'KJo':31,'A4s':32,'A3s':33,'A6s':34,'QJo':35,'66':36,'K8s':37,'T8s':38,'A2s':39,'98s':40,
+  'J8s':41,'ATo':42,'Q8s':43,'K7s':44,'KTo':45,'55':46,'JTo':47,'87s':48,'QTo':49,'44':50,
+  '33':51,'22':52,'K6s':53,'97s':54,'K5s':55,'76s':56,'T7s':57,'K4s':58,'K2s':59,'Q7s':60,
+  'K3s':61,'86s':62,'65s':63,'J7s':64,'54s':65,'Q6s':66,'75s':67,'96s':68,'Q5s':69,'64s':70,
+  'Q4s':71,'Q3s':72,'T9o':73,'J6s':74,'T6s':75,'Q2s':76,'A9o':77,'Q9o':78,'J9o':79,'53s':80,
+  'K9o':81,'85s':82,'J5s':83,'J4s':84,'T5s':85,'J3s':86,'74s':87,'J2s':88,'43s':89,'95s':90,
+  'T4s':91,'A8o':92,'T3s':93,'63s':94,'T2s':95,'52s':96,'84s':97,'94s':98,'42s':99,'A5o':100,
+  'A7o':101,'A4o':102,'93s':103,'A3o':104,'32s':105,'A6o':106,'73s':107,'62s':108,'K8o':109,
+  '82s':110,'A2o':111,'T8o':112,'72s':113,'J8o':114,'98o':115,'Q8o':116,'87o':117,'K7o':118,
+  '97o':119,'76o':120,'K6o':121,'T7o':122,'86o':123,'65o':124,'K5o':125,'54o':126,'J7o':127,
+  'K4o':128,'75o':129,'K3o':130,'96o':131,'K2o':132,'64o':133,'Q7o':134,'53o':135,'85o':136,
+  'T6o':137,'Q6o':138,'J6o':139,'74o':140,'Q5o':141,'43o':142,'95o':143,'Q4o':144,'63o':145,
+  'J5o':146,'Q3o':147,'52o':148,'T5o':149,'84o':150,'J4o':151,'Q2o':152,'42o':153,'T4o':154,
+  '94o':155,'J3o':156,'32o':157,'T3o':158,'93o':159,'62o':160,'J2o':161,'73o':162,'T2o':163,
+  '82o':164,'83o':165,'83s':166,'92o':167,'92s':168,'72o':169,
+};
+
+// Compute combo counts from the actual hand labels in ranked order
+const RANK_COMBOS: number[] = (() => {
+  const sorted = Object.entries(HAND_RANKINGS_169).sort((a, b) => a[1] - b[1]);
+  return sorted.map(([key]) => {
+    if (key.length === 2) return 6; // pair: "AA"
+    if (key.endsWith('s')) return 4; // suited: "AKs"
+    return 12; // offsuit: "AKo"
+  });
+})();
+
+// Cumulative combos up to each rank
+let cum = 0;
+const RANK_CUMULATIVE: number[] = RANK_COMBOS.map(c => { cum += c; return cum; });
+const TOTAL_COMBOS = 1326;
+
+// Sanity: last cumulative should be ~1326
+if (RANK_CUMULATIVE.length > 0) {
+  const last = RANK_CUMULATIVE[RANK_CUMULATIVE.length - 1];
+  if (last !== TOTAL_COMBOS) {
+    console.warn(`Hand combos sum to ${last}, expected ${TOTAL_COMBOS}`);
+  }
+}
+
+const getHandPercentile = (r1: number, r2: number, isPair: boolean, isSuited: boolean): number => {
+  const highRank = RANKS[Math.min(r1, r2)];
+  const lowRank = RANKS[Math.max(r1, r2)];
+  const key = isPair ? `${highRank}${lowRank}` : isSuited ? `${highRank}${lowRank}s` : `${highRank}${lowRank}o`;
+  const rank169 = HAND_RANKINGS_169[key];
+  if (!rank169 || rank169 < 1 || rank169 > RANK_CUMULATIVE.length) return 100;
+  return (RANK_CUMULATIVE[rank169 - 1] / TOTAL_COMBOS) * 100;
+};
+
+// HSL gradient: hue from 120 (green) to 0 (red) based on percentile
+const getCellColor = (pct: number) => {
+  const hue = 120 - (pct / 100) * 120;
+  const bgSat = pct < 10 ? 85 : pct < 30 ? 70 : pct < 60 ? 55 : 70;
+  const bgLight = pct < 15 ? 20 : pct < 40 ? 17 : 15;
+  const textLight = pct < 20 ? 78 : pct < 50 ? 70 : 65;
+  return {
+    bg: `hsl(${hue}, ${bgSat}%, ${bgLight}%)`,
+    text: `hsl(${hue}, 80%, ${textLight}%)`,
+  };
+};
+
+const StartingHandsMatrix: React.FC = () => (
+  <div className="inline-block min-w-full">
+    {/* Legend - gradient bar */}
+    <div className="flex items-center gap-2 mb-3 text-[10px]">
+      <span className="text-accent-green font-semibold">Best</span>
+      <div className="flex-1 h-3 rounded-full" style={{ background: 'linear-gradient(to right, hsl(120,85%,22%), hsl(70,75%,18%), hsl(30,60%,16%), hsl(0,80%,15%))' }} />
+      <span className="text-accent-red font-semibold">Worst</span>
+      <span className="text-text-secondary/40 ml-3">Lower % = better</span>
+    </div>
+    {/* Grid */}
+    <div className="grid" style={{ gridTemplateColumns: `32px repeat(13, 1fr)` }}>
+      {/* Header row */}
+      <div className="h-7" />
+      {RANKS.map(r => (
+        <div key={r} className="h-7 flex items-center justify-center text-[11px] font-black text-text-secondary/50">{r}</div>
+      ))}
+      {RANKS.map((r1, i) => (
+        <React.Fragment key={r1}>
+          {/* Row label */}
+          <div className="h-7 flex items-center justify-center text-[11px] font-black text-text-secondary/50">{r1}</div>
+          {RANKS.map((r2, j) => {
+            const isPair = i === j;
+            const isSuited = i > j;
+            const label = isPair ? `${r1}${r2}` : isSuited ? `${r2}${r1}s` : `${r1}${r2}o`;
+            const pct = getHandPercentile(i, j, isPair, isSuited);
+            const c = getCellColor(pct);
+            return (
+              <div
+                key={`${i}-${j}`}
+                className="flex flex-col items-center justify-center rounded-sm border transition-all cursor-default hover:scale-110 hover:z-10"
+                style={{
+                  backgroundColor: c.bg,
+                  color: c.text,
+                  borderColor: `${c.text}20`,
+                  minHeight: '36px',
+                }}
+                title={`${label} - Top ${pct.toFixed(1)}%`}
+              >
+                <span className="text-[10px] font-black leading-tight">{label}</span>
+                <span className="text-[8.5px] font-medium opacity-60 leading-tight">{pct.toFixed(1)}%</span>
+              </div>
+            );
+          })}
+        </React.Fragment>
+      ))}
     </div>
   </div>
 );

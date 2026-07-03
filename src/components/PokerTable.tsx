@@ -49,7 +49,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, faceDown = false, size 
 const PokerTable: React.FC = () => {
   const gameState = useGameStore(s => s.gameState);
   const showRiskOverlay = useGameStore(s => s.showRiskOverlay);
-  const showCardsAtEnd = useGameStore(s => s.showCardsAtEnd);
+  const autoPlayMode = useGameStore(s => s.autoPlayMode);
   const gamePhase = useGameStore(s => s.gamePhase);
 
   if (!gameState) return null;
@@ -64,9 +64,12 @@ const PokerTable: React.FC = () => {
     };
   };
 
-  const botPlayers = gameState.players.filter(p => p.isBot);
+  const allBots = gameState.players.filter(p => p.isBot);
+  const tBot = allBots.find(p => p.isTrainingBot);
+  const arcBots = autoPlayMode ? allBots.filter(p => !p.isTrainingBot) : allBots;
   const humanPlayer = gameState.players.find(p => !p.isBot)!;
-  const isActivePlayer = gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
+  const showHuman = !autoPlayMode;
+  const isActivePlayer = showHuman && gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
   const humanIdx = gameState.players.findIndex(p => !p.isBot);
   const winnerPlayer = gameState.gameOver && gameState.winner
     ? gameState.players.find(p => p.id === gameState.winner!.playerId)
@@ -108,7 +111,7 @@ const PokerTable: React.FC = () => {
 
         {/* Phase badge */}
         {showRiskOverlay && (
-          <div className="absolute top-[18%] left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md rounded-lg px-3 py-1 z-10 text-center border border-white/10">
+          <div className="absolute top-[10%] left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md rounded-lg px-3 py-1 z-10 text-center border border-white/10">
             <span className="text-[9px] text-text-secondary/60 uppercase tracking-wider font-semibold">{gamePhase}</span>
           </div>
         )}
@@ -122,26 +125,8 @@ const PokerTable: React.FC = () => {
 
         {/* Winner overlay */}
         {winnerPlayer && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none animate-pop-in">
-            {/* Confetti particles */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {Array.from({ length: 40 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute rounded-sm pointer-events-none"
-                  style={{
-                    left: `${5 + Math.random() * 90}%`,
-                    top: '-10px',
-                    width: `${4 + Math.random() * 8}px`,
-                    height: `${6 + Math.random() * 10}px`,
-                    backgroundColor: ['#d4af37','#f0d060','#ef4444','#22c55e','#3b82f6','#06b6d4','#eab308','#f97316'][i % 8],
-                    animation: `confettiFall ${2 + Math.random() * 2.5}s ease-in ${Math.random() * 1.2}s forwards`,
-                    transform: `rotate(${Math.random() * 360}deg)`,
-                  }}
-                />
-              ))}
-            </div>
-            <div className="bg-black/50 rounded-3xl border border-gold/40 px-8 md:px-10 py-5 md:py-6 text-center space-y-2 md:space-y-3 pointer-events-auto">
+          <div className="absolute top-[14%] left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-pop-in">
+            <div className="bg-black/50 rounded-2xl border border-gold/40 px-6 py-4 text-center space-y-1.5 pointer-events-auto">
               <Trophy size={40} className="text-gold mx-auto" />
               <div>
                 <div className="text-2xl font-black text-gold">
@@ -159,8 +144,10 @@ const PokerTable: React.FC = () => {
           </div>
         )}
 
-        {/* Human player — sits on bottom edge */}
-        <div className="absolute -bottom-[3%] left-1/2 -translate-x-1/2 flex flex-col items-center z-20 transition-all duration-300">
+        {/* Human player / T-Bot — sits on bottom edge */}
+        <div className="absolute -bottom-[3%] left-1/2 -translate-x-1/2 flex flex-col items-center z-20">
+        {showHuman && (
+        <div className="flex flex-col items-center">
           {/* Winner glow ring */}
           {isHumanWinner && (
             <div className="absolute -inset-3 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none" />
@@ -207,10 +194,36 @@ const PokerTable: React.FC = () => {
             {humanPlayer.chips === 0 && !humanPlayer.folded && <div className="mt-1 text-center text-[11px] text-accent-red font-bold">ALL IN</div>}
           </div>
         </div>
+        )}
+
+        {/* T-Bot in same spot when auto mode */}
+        {autoPlayMode && tBot && (
+        <div className="flex flex-col items-center">
+          <div className="flex gap-1 mb-1">
+            {tBot.hand.map(card => (<CardDisplay key={card.id} card={card} size="md" />))}
+          </div>
+          <div className={`rounded-2xl border-2 p-2.5 min-w-[130px] relative transition-all duration-300 border-accent-cyan bg-surface-elevated shadow-[0_0_24px_rgba(6,182,212,0.3)]`}>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-cyan-500 text-white">T</div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-sm">T-Bot</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 font-bold">AUTO</span>
+                </div>
+                <div className="text-cyan-400 text-xs font-mono font-semibold">${tBot.chips}</div>
+              </div>
+            </div>
+            {tBot.bet > 0 && (
+              <div className="mt-1.5 text-center text-[11px] text-accent-yellow font-mono font-semibold bg-black/20 rounded-full px-2 py-0.5">Bet: ${tBot.bet}</div>
+            )}
+          </div>
+        </div>
+        )}
+        </div>
 
         {/* Bot players */}
-        {botPlayers.map((player, idx) => {
-          const pos = getPlayerPosition(idx, botPlayers.length);
+        {arcBots.map((player, idx) => {
+          const pos = getPlayerPosition(idx, arcBots.length);
           const isTraining = player.isTrainingBot === true;
           const isCurrent = gameState.players[gameState.currentPlayerIndex]?.id === player.id && !gameState.gameOver;
           const isWinnerBot = gameState.gameOver && gameState.winner?.playerId === player.id;
@@ -218,7 +231,7 @@ const PokerTable: React.FC = () => {
           return (
             <div key={player.id} className="absolute z-20 transition-all duration-300 flex flex-col items-center gap-0.5" style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}>
               {/* Reveal hole cards at end of game */}
-              {showCardsAtEnd && gameState.gameOver && (
+              {gameState.gameOver && (
                 <div className="flex gap-0.5 mb-0.5">
                   {player.hand.map(card => (
                     <CardDisplay key={card.id} card={card} size="sm" />

@@ -71,16 +71,16 @@ const RiskOverlay: React.FC = () => {
       <div className="card-premium text-center">
         <div className="flex items-center justify-center gap-1.5 mb-1">
           <Percent size={14} className="text-gold" />
-          <span className="text-[10px] text-text-secondary/50 uppercase tracking-wider font-bold">Win Rate</span>
+          <span className="text-[11px] text-text-secondary/60 uppercase tracking-wider font-bold">Win Rate</span>
         </div>
         <div className={`text-4xl font-black font-mono ${winColor(equityPct)}`}>
-          {equityPct.toFixed(1)}<span className="text-lg">%</span>
+          {equityPct.toFixed(1)}<span className="text-xl">%</span>
         </div>
-        <div className="text-[11px] font-bold text-text-secondary/60 mt-0.5">{handEval.description}</div>
-        <div className="w-full bg-white/5 rounded-full h-2 mt-2 overflow-hidden">
+        <div className="text-xs font-semibold text-text-secondary/60 mt-0.5">{handEval.description}</div>
+        <div className="w-full bg-white/5 rounded-full h-2.5 mt-2 overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${equityPct}%`, backgroundColor: barColor(equityPct) }} />
         </div>
-        <div className="flex justify-between text-[9px] text-text-secondary/30 font-mono mt-0.5 px-1">
+        <div className="flex justify-between text-[10px] text-text-secondary/40 font-mono mt-0.5 px-1">
           <span>0%</span><span>50%</span><span>100%</span>
         </div>
       </div>
@@ -89,9 +89,9 @@ const RiskOverlay: React.FC = () => {
       <div className="card-premium">
         <div className="flex items-center gap-1.5 mb-2">
           <Target size={14} className="text-gold" />
-          <span className="text-[10px] font-bold text-text-secondary/50 uppercase tracking-wider">Per Action</span>
+          <span className="text-[11px] font-bold text-text-secondary/60 uppercase tracking-wider">Per Action</span>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {[
             { action: 'Fold', pct: 0, muted: true },
             { action: toCall > 0 ? 'Call' : 'Check', pct: equityPct },
@@ -99,8 +99,8 @@ const RiskOverlay: React.FC = () => {
             { action: 'All-In', pct: allInPct },
           ].map(row => (
             <div key={row.action} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/[0.03]">
-              <span className={`text-xs font-semibold ${row.muted ? 'text-text-secondary/30' : 'text-text-secondary/70'}`}>{row.action}</span>
-              <span className={`text-xs font-black font-mono ${row.muted ? 'text-text-secondary/20' : winColor(row.pct)}`}>
+              <span className={`text-sm font-semibold ${row.muted ? 'text-text-secondary/30' : 'text-text-secondary/70'}`}>{row.action}</span>
+              <span className={`text-sm font-black font-mono ${row.muted ? 'text-text-secondary/20' : winColor(row.pct)}`}>
                 {row.pct.toFixed(row.pct === 0 ? 0 : 1)}%
               </span>
             </div>
@@ -112,18 +112,18 @@ const RiskOverlay: React.FC = () => {
       <div className="card-premium">
         <div className="flex items-center gap-1.5 mb-2">
           <TrendingUp size={14} className={expectedValue >= 0 ? 'text-accent-green' : 'text-accent-red'} />
-          <span className="text-[10px] font-bold text-text-secondary/50 uppercase tracking-wider">EV</span>
+          <span className="text-[11px] font-bold text-text-secondary/60 uppercase tracking-wider">EV</span>
         </div>
         <div className={`text-2xl font-black font-mono ${expectedValue >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
           {expectedValue >= 0 ? '+' : ''}${expectedValue.toFixed(2)}
         </div>
-        <div className="space-y-1 mt-2">
-          <div className="flex justify-between text-[10px]">
-            <span className="text-text-secondary/40">Pot Odds</span>
-            <span className="font-mono font-bold text-text-secondary/60">{potOdds.toFixed(1)}%</span>
+        <div className="space-y-1.5 mt-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-text-secondary/50">Pot Odds</span>
+            <span className="font-mono font-bold text-text-secondary/70">{potOdds.toFixed(1)}%</span>
           </div>
-          <div className="flex justify-between text-[10px]">
-            <span className="text-text-secondary/40">Verdict</span>
+          <div className="flex justify-between text-xs">
+            <span className="text-text-secondary/50">Verdict</span>
             <span className={`font-bold ${expectedValue >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
               {expectedValue >= 0 ? 'Profitable' : 'Consider Fold'}
             </span>
@@ -135,7 +135,7 @@ const RiskOverlay: React.FC = () => {
       <div className="card-premium">
         <div className="flex items-center gap-1.5 mb-2">
           <Shield size={14} className="text-accent-blue" />
-          <span className="text-[10px] font-bold text-text-secondary/50 uppercase tracking-wider">vs Range</span>
+          <span className="text-[11px] font-bold text-text-secondary/60 uppercase tracking-wider">vs Range</span>
         </div>
         <ResponsiveContainer width="100%" height={70}>
           <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 0 }}>
@@ -146,10 +146,10 @@ const RiskOverlay: React.FC = () => {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <div className="flex justify-between mt-1 text-[9px] text-text-secondary/30">
+        <div className="flex justify-between mt-1 text-[10px] text-text-secondary/40 font-medium">
           {barData.map(d => <span key={d.name}>{d.name}</span>)}
         </div>
-        <div className="text-center text-[10px] text-text-secondary/30 mt-0.5 font-mono">
+        <div className="text-center text-[10px] text-text-secondary/40 mt-0.5 font-mono">
           Score: {handEval.score.toLocaleString()} · {cardsSeen}/7 cards · {activeOpponents} opp
         </div>
       </div>

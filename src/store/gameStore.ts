@@ -81,6 +81,7 @@ interface GameStore {
   showTableTalk: boolean;
   showCardsAtEnd: boolean;
   autoPlayMode: boolean;
+  tbotActivity: { action: string; amount?: number; confidence: number; reasoning: string; isBluff: boolean; timestamp: number } | null;
   botEvaluations: BotEvaluationEntry[];
   autoPlaySpeed: number;
 
@@ -161,6 +162,7 @@ export const useGameStore = create<GameStore>()(
       showTableTalk: false,
       showCardsAtEnd: true,
       autoPlayMode: false,
+      tbotActivity: null,
       botEvaluations: [],
       autoPlaySpeed: 400,
 
@@ -355,16 +357,20 @@ export const useGameStore = create<GameStore>()(
         if (!state.gameState) return;
 
         const player = state.gameState.players[state.gameState.currentPlayerIndex];
-        if (!player || !player.isBot) return;
+        if (!player) return;
+        // Allow human in autoPlayMode, otherwise only bots
+        if (!player.isBot && !state.autoPlayMode) return;
         if (player.folded || player.chips <= 0) return;
 
-        // Use training bot settings OR opponent bot settings
-        const settings = player.isTrainingBot ? state.trainingBotSettings : state.botSettings;
+        // In auto mode, human uses training bot settings
+        const isAutoHuman = !player.isBot && state.autoPlayMode;
+        const settings = (player.isTrainingBot || isAutoHuman) ? state.trainingBotSettings : state.botSettings;
         const decision = botDecision(state.gameState, player, settings);
 
         const players = state.gameState.players.map(p => ({ ...p }));
         const pIdx = state.gameState.currentPlayerIndex;
         const currentPlayer = { ...players[pIdx] };
+        let wasRaise = false;
 
         switch (decision.action) {
           case 'fold':
@@ -387,6 +393,7 @@ export const useGameStore = create<GameStore>()(
             currentPlayer.chips -= toAdd;
             currentPlayer.bet += toAdd;
             currentPlayer.totalBetThisRound += toAdd;
+            wasRaise = true;
             break;
           }
         }
@@ -394,9 +401,31 @@ export const useGameStore = create<GameStore>()(
         currentPlayer.actedThisRound = true;
         players[pIdx] = currentPlayer;
 
+        // If bot raised, reset other active players so they can respond
+        if (wasRaise) {
+          for (let i = 0; i < players.length; i++) {
+            if (i !== pIdx && !players[i].folded && players[i].chips > 0) {
+              players[i].actedThisRound = false;
+            }
+          }
+        }
+
         const oldTotalBet = state.gameState.players[pIdx].totalBetThisRound;
         const potIncrease = Math.max(0, currentPlayer.totalBetThisRound - oldTotalBet);
         const newPot = state.gameState.pot + potIncrease;
+
+        // Track T-Bot activity for UI display
+        const isTraining = player.isTrainingBot || (!player.isBot && state.autoPlayMode);
+        const tbotUpdate = isTraining ? {
+          tbotActivity: {
+            action: decision.action,
+            amount: decision.amount,
+            confidence: decision.confidence,
+            reasoning: decision.reasoning,
+            isBluff: decision.isBluff,
+            timestamp: Date.now(),
+          } as GameStore['tbotActivity'],
+        } : {};
 
         set({
           gameState: {
@@ -406,6 +435,7 @@ export const useGameStore = create<GameStore>()(
             currentBet: decision.action === 'raise' ? currentPlayer.bet : state.gameState.currentBet,
             lastAction: `${currentPlayer.name} ${decision.action}${decision.action === 'raise' ? ` to $${currentPlayer.bet}` : ''}${decision.isBluff ? ' (bluff!)' : ''}`,
           },
+          ...tbotUpdate,
         });
       },
 
@@ -427,6 +457,7 @@ export const useGameStore = create<GameStore>()(
             human.actedThisRound = true;
             players[humanIdx] = human;
             set({ gameState: { ...gs, players, lastAction: 'You check' } });
+            get().advanceTurn();
             return;
           case 'call': {
             const callAmt = Math.min(gs.currentBet - human.bet, human.chips);
@@ -434,6 +465,7 @@ export const useGameStore = create<GameStore>()(
               human.actedThisRound = true;
               players[humanIdx] = human;
               set({ gameState: { ...gs, players, lastAction: 'You check' } });
+              get().advanceTurn();
               return;
             }
             human.chips -= callAmt;
@@ -448,6 +480,7 @@ export const useGameStore = create<GameStore>()(
               human.actedThisRound = true;
               players[humanIdx] = human;
               set({ gameState: { ...gs, players, lastAction: 'You check' } });
+              get().advanceTurn();
               return;
             }
             human.chips -= toAdd;
