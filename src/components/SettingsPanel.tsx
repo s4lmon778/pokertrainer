@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
-import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye } from 'lucide-react';
+import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye, Save, FolderOpen, CheckCircle } from 'lucide-react';
 
 const SettingsPanel: React.FC = React.memo(() => {
   const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
@@ -234,6 +234,60 @@ const SettingsPanel: React.FC = React.memo(() => {
           </div>
         </div>
 
+        {/* Experience Level Presets */}
+        <div className="mb-3">
+          <label className="text-xs text-text-secondary mb-1.5 block font-semibold flex items-center gap-1">
+            <Sliders size={12} className="text-gold" /> Experience Level
+          </label>
+          <p className="text-[10px] text-text-secondary/40 mb-1.5">Configure your training bot for different skill levels and play styles.</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {([
+              {
+                key: 'beginner', label: 'Beginner', desc: 'Tight, passive, low bluff',
+                settings: { aggressionFactor: 0.30, bluffFrequency: 0.05, mistakeRate: 0.06, reactionTimeMin: 0.6, reactionTimeMax: 4.0, personality: 'tight-passive' as BotPersonality },
+                color: 'border-green-400/40 bg-green-500/10 hover:bg-green-500/20 text-green-400',
+                active: trainingPersonality === 'tight-passive' && trainingBotSettings.bluffFrequency < 0.08,
+              },
+              {
+                key: 'intermediate', label: 'Intermediate', desc: 'Balanced play',
+                settings: { aggressionFactor: 0.50, bluffFrequency: 0.10, mistakeRate: 0.03, reactionTimeMin: 0.4, reactionTimeMax: 2.5, personality: 'balanced' as BotPersonality },
+                color: 'border-blue-400/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400',
+                active: trainingPersonality === 'balanced' && trainingBotSettings.aggressionFactor > 0.4 && trainingBotSettings.aggressionFactor < 0.7,
+              },
+              {
+                key: 'advanced', label: 'Advanced', desc: 'Loose, aggressive, high bluff',
+                settings: { aggressionFactor: 0.80, bluffFrequency: 0.22, mistakeRate: 0.02, reactionTimeMin: 0.2, reactionTimeMax: 1.5, personality: 'loose-aggressive' as BotPersonality },
+                color: 'border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-400',
+                active: trainingPersonality === 'loose-aggressive' && trainingBotSettings.aggressionFactor > 0.7,
+              },
+              {
+                key: 'gto', label: 'GTO', desc: 'Game theory optimal',
+                settings: { aggressionFactor: 0.55, bluffFrequency: 0.10, mistakeRate: 0.01, reactionTimeMin: 0.3, reactionTimeMax: 1.5, personality: 'balanced' as BotPersonality },
+                color: 'border-purple-400/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400',
+                active: trainingPersonality === 'balanced' && trainingBotSettings.mistakeRate < 0.02,
+              },
+              {
+                key: 'exploitative', label: 'Exploit', desc: 'Adaptive, high bluff',
+                settings: { aggressionFactor: 0.90, bluffFrequency: 0.25, mistakeRate: 0.03, reactionTimeMin: 0.3, reactionTimeMax: 2.0, personality: 'loose-aggressive' as BotPersonality },
+                color: 'border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400',
+                active: trainingPersonality === 'loose-aggressive' && trainingBotSettings.bluffFrequency > 0.20,
+              },
+            ] as const).map(p => (
+              <button
+                key={p.key}
+                onClick={() => {
+                  updateTrainingBotSettings(p.settings);
+                  if (p.settings.personality) setTrainingPersonality(p.settings.personality);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${p.color} ${p.active ? 'ring-1 ring-gold/50' : ''}`}
+                title={p.desc}
+              >
+                <Eye size={10} /> {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Training Bot Sliders */}
         <div className="space-y-3">
           <SliderControl
@@ -350,18 +404,20 @@ const SettingsPanel: React.FC = React.memo(() => {
       {/* ===== TRAINING BOT ADVANCED CONFIG (STUBBED) ===== */}
       <AdvancedBotConfig />
 
-      {/* Export / Import Settings */}
+      {/* Export / Import / Backup Settings */}
       <div className="card">
         <div className="flex items-center gap-2 mb-2">
           <Sliders size={16} className="text-gold" />
-          <span className="font-bold text-sm">Export / Import Settings</span>
+          <span className="font-bold text-sm">Export / Import / Backup</span>
         </div>
         <p className="text-xs text-text-secondary mb-3">
-          Save your current training bot configuration as a JSON file, or load a previously saved configuration. Settings persist across sessions via localStorage.
+          Save your current configuration as a JSON file, load a previously saved configuration, or backup/restore settings in your browser.
         </p>
         <div className="flex gap-2 flex-wrap">
           <ExportSettingsButton />
           <ImportSettingsButton />
+          <BackupSettingsButton />
+          <RestoreSettingsButton />
         </div>
       </div>
 
@@ -639,5 +695,115 @@ const ImportSettingsButton: React.FC = React.memo(() => {
   );
 });
 ImportSettingsButton.displayName = 'ImportSettingsButton';
+
+// ── Backup / Restore Buttons ──
+
+const BACKUP_KEY = 'pokertrainer-settings-backup';
+
+const BackupSettingsButton: React.FC = React.memo(() => {
+  const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
+  const botSettings = useGameStore(s => s.botSettings);
+  const opponentPersonality = useGameStore(s => s.opponentPersonality);
+  const tableSize = useGameStore(s => s.tableSize);
+  const buyIn = useGameStore(s => s.buyIn);
+  const startingBankroll = useGameStore(s => s.startingBankroll);
+  const autoPlaySpeed = useGameStore(s => s.autoPlaySpeed);
+  const [status, setStatus] = useState<'idle' | 'saved'>('idle');
+
+  const handleBackup = useCallback(() => {
+    const config = {
+      version: 1,
+      backedUpAt: new Date().toISOString(),
+      trainingBotSettings,
+      opponentSettings: botSettings,
+      opponentPersonality,
+      tableConfig: { tableSize, buyIn, startingBankroll, autoPlaySpeed },
+    };
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(config));
+      setStatus('saved');
+      setTimeout(() => setStatus('idle'), 2000);
+    } catch { /* noop */ }
+  }, [trainingBotSettings, botSettings, opponentPersonality, tableSize, buyIn, startingBankroll, autoPlaySpeed]);
+
+  return (
+    <button onClick={handleBackup} className="btn-secondary flex items-center gap-1.5 text-xs">
+      {status === 'saved' ? <CheckCircle size={14} className="text-accent-green" /> : <Save size={14} />}
+      {status === 'saved' ? 'Saved!' : 'Backup'}
+    </button>
+  );
+});
+BackupSettingsButton.displayName = 'BackupSettingsButton';
+
+const RestoreSettingsButton: React.FC = React.memo(() => {
+  const updateTrainingBotSettings = useGameStore(s => s.updateTrainingBotSettings);
+  const updateBotSettings = useGameStore(s => s.updateBotSettings);
+  const setOpponentPersonality = useGameStore(s => s.setOpponentPersonality);
+  const setTableSize = useGameStore(s => s.setTableSize);
+  const setBuyIn = useGameStore(s => s.setBuyIn);
+  const setStartingBankroll = useGameStore(s => s.setStartingBankroll);
+  const setAutoPlaySpeed = useGameStore(s => s.setAutoPlaySpeed);
+  const [status, setStatus] = useState<'idle' | 'restored' | 'error'>('idle');
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const handleRestore = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY);
+      if (!raw) {
+        setStatus('error');
+        setStatusMsg('No backup found');
+        setTimeout(() => setStatus('idle'), 3000);
+        return;
+      }
+      const config = JSON.parse(raw);
+      // Validate backup format
+      if (!config.version || !config.trainingBotSettings) {
+        throw new Error('Invalid backup format');
+      }
+      // Validate key settings fields
+      const ts = config.trainingBotSettings;
+      if (typeof ts.aggressionFactor !== 'number' || ts.aggressionFactor < 0 || ts.aggressionFactor > 1) {
+        throw new Error('Invalid aggressionFactor in backup');
+      }
+      if (typeof ts.bluffFrequency !== 'number' || ts.bluffFrequency < 0 || ts.bluffFrequency > 1) {
+        throw new Error('Invalid bluffFrequency in backup');
+      }
+      if (typeof ts.mistakeRate !== 'number' || ts.mistakeRate < 0 || ts.mistakeRate > 1) {
+        throw new Error('Invalid mistakeRate in backup');
+      }
+      if (config.trainingBotSettings) updateTrainingBotSettings(config.trainingBotSettings);
+      if (config.opponentSettings) updateBotSettings(config.opponentSettings);
+      if (config.opponentPersonality) setOpponentPersonality(config.opponentPersonality);
+      if (config.tableConfig) {
+        const tc = config.tableConfig;
+        if (tc.tableSize) setTableSize(tc.tableSize);
+        if (tc.buyIn) setBuyIn(tc.buyIn);
+        if (tc.startingBankroll) setStartingBankroll(tc.startingBankroll);
+        if (tc.autoPlaySpeed) setAutoPlaySpeed(tc.autoPlaySpeed);
+      }
+      setStatus('restored');
+      setStatusMsg('Settings restored!');
+      setTimeout(() => setStatus('idle'), 3000);
+    } catch (err) {
+      setStatus('error');
+      setStatusMsg(err instanceof Error ? err.message : 'Failed to restore');
+      setTimeout(() => setStatus('idle'), 3000);
+    }
+  }, [updateTrainingBotSettings, updateBotSettings, setOpponentPersonality, setTableSize, setBuyIn, setStartingBankroll, setAutoPlaySpeed]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <button onClick={handleRestore} className="btn-secondary flex items-center gap-1.5 text-xs">
+        <FolderOpen size={14} /> Restore Backup
+      </button>
+      {status !== 'idle' && (
+        <span className={`text-[10px] font-semibold ${status === 'restored' ? 'text-green-400' : 'text-red-400'} animate-fade-in`}>
+          {statusMsg}
+        </span>
+      )}
+    </div>
+  );
+});
+RestoreSettingsButton.displayName = 'RestoreSettingsButton';
 
 export default SettingsPanel;
