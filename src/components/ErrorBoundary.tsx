@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { captureException, addBreadcrumb, resetCrashCount } from '../utils/monitoring';
 
 interface Props {
   children: React.ReactNode;
@@ -35,9 +36,19 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('ErrorBoundary caught:', error.message, '\nComponent stack:', info.componentStack);
+
+    // Report to monitoring service
+    addBreadcrumb('error-boundary', `Caught error: ${error.message}`, 'error', {
+      componentStack: info.componentStack?.slice(0, 500),
+    });
+    captureException(error, {
+      source: 'ErrorBoundary',
+      componentStack: info.componentStack?.slice(0, 300) || '',
+    });
   }
 
   handleReset = () => {
+    resetCrashCount();
     this.setState({ hasError: false, error: null });
   };
 
@@ -45,9 +56,11 @@ class ErrorBoundary extends React.Component<Props, State> {
     const { retryCount } = this.state;
     if (retryCount >= 3) {
       // After 3 retries, suggest a full page reload
+      addBreadcrumb('error-boundary', 'Max retries reached, reloading page', 'warning');
       window.location.reload();
       return;
     }
+    addBreadcrumb('error-boundary', `Recovery attempt ${retryCount + 1}/3`, 'info');
     this.setState({ hasError: false, error: null, retryCount: retryCount + 1 });
   };
 

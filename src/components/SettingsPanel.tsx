@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
-import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye, Save, FolderOpen, CheckCircle } from 'lucide-react';
+import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye, Save, FolderOpen, CheckCircle, Database, FileJson } from 'lucide-react';
+import { exportData, importData, type ImportResult, restoreAutoBackup, getAutoBackupAge, checkStorageUsage } from '../utils/backup';
 
 const SettingsPanel: React.FC = React.memo(() => {
   const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
@@ -421,6 +422,22 @@ const SettingsPanel: React.FC = React.memo(() => {
         </div>
       </div>
 
+      {/* Game Data Export / Import */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-2">
+          <Database size={16} className="text-accent-cyan" />
+          <span className="font-bold text-sm">Game Data Backup</span>
+        </div>
+        <p className="text-xs text-text-secondary mb-3">
+          Export all your game data (stats, history, bankroll) as a JSON backup file. Import a previous backup to restore your progress.
+        </p>
+        <div className="flex gap-2 flex-wrap mb-3">
+          <GameDataExportButton />
+          <GameDataImportButton />
+        </div>
+        <AutoBackupInfo />
+      </div>
+
       {/* Reset */}
       <button onClick={resetStats}
         className="btn-ghost w-full flex items-center justify-center gap-2 text-accent-red border-accent-red/30 hover:bg-accent-red/10 hover:text-accent-red hover:border-accent-red/50">
@@ -805,5 +822,115 @@ const RestoreSettingsButton: React.FC = React.memo(() => {
   );
 });
 RestoreSettingsButton.displayName = 'RestoreSettingsButton';
+
+// ── Game Data Export / Import ──
+
+const GameDataExportButton: React.FC = React.memo(() => {
+  const [status, setStatus] = useState<'idle' | 'exported'>('idle');
+
+  const handleExport = useCallback(() => {
+    const result = exportData();
+    if (result) {
+      setStatus('exported');
+      setTimeout(() => setStatus('idle'), 3000);
+    }
+  }, []);
+
+  return (
+    <button onClick={handleExport} className="btn-secondary flex items-center gap-1.5 text-xs">
+      {status === 'exported' ? <CheckCircle size={14} className="text-accent-green" /> : <FileJson size={14} />}
+      {status === 'exported' ? 'Downloaded!' : 'Export All Data'}
+    </button>
+  );
+});
+GameDataExportButton.displayName = 'GameDataExportButton';
+
+const GameDataImportButton: React.FC = React.memo(() => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const result: ImportResult = await importData(file);
+    if (result.success) {
+      setStatus('success');
+      setStatusMsg(`Imported! ${result.summary?.totalHands ?? 0} hands, bankroll $${result.summary?.currentBankroll ?? 0}`);
+      // Reload to apply imported data
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      setStatus('error');
+      setStatusMsg(result.error || 'Import failed');
+    }
+    setTimeout(() => setStatus('idle'), 4000);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        onChange={handleImport}
+        className="hidden"
+        id="import-data-input"
+        aria-label="Import game data from JSON backup file"
+      />
+      <label htmlFor="import-data-input" className="btn-secondary flex items-center gap-1.5 text-xs cursor-pointer">
+        <Upload size={14} /> Import Data
+      </label>
+      {status !== 'idle' && (
+        <span className={`text-[10px] font-semibold ${status === 'success' ? 'text-green-400' : 'text-red-400'} animate-fade-in`}>
+          {statusMsg}
+        </span>
+      )}
+    </div>
+  );
+});
+GameDataImportButton.displayName = 'GameDataImportButton';
+
+const AutoBackupInfo: React.FC = React.memo(() => {
+  const backupAge = getAutoBackupAge();
+  const usage = checkStorageUsage();
+
+  const formatAge = (ms: number): string => {
+    if (ms < 0) return 'No backup';
+    if (ms < 60000) return 'Just now';
+    const minutes = Math.floor(ms / 60000);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ${minutes % 60}m ago`;
+  };
+
+  return (
+    <div className="space-y-2 text-[10px]">
+      <div className="flex items-center justify-between text-text-secondary/50">
+        <span className="flex items-center gap-1">
+          <Database size={10} />
+          Auto-backup:
+        </span>
+        <span className={backupAge >= 0 && backupAge < 3600000 ? 'text-green-400 font-semibold' : 'text-text-secondary/40'}>
+          {formatAge(backupAge)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-text-secondary/50">
+        <span>Storage:</span>
+        <span className={usage.warning ? 'text-accent-yellow font-semibold' : 'text-text-secondary/40'}>
+          {usage.percentUsed.toFixed(1)}% used
+          {usage.warning && ' ⚠'}
+        </span>
+      </div>
+      {usage.warning && (
+        <p className="text-accent-yellow/60 text-[9px]">
+          Storage almost full. Export your data and clear old data to free space.
+        </p>
+      )}
+    </div>
+  );
+});
+AutoBackupInfo.displayName = 'AutoBackupInfo';
 
 export default SettingsPanel;

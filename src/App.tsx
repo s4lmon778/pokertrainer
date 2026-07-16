@@ -7,6 +7,7 @@ import Card from './components/Card';
 import CoachTips from './components/CoachTips';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useGameStore } from './store/gameStore';
+import { initMonitoring, addBreadcrumb, reportWebVitals } from './utils/monitoring';
 import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle, Loader2 } from 'lucide-react';
 
 // Code-split heavy components for faster initial load
@@ -52,6 +53,17 @@ const App: React.FC = () => {
       addHumanChips(amt);
     }
   };
+
+  // Initialize monitoring on mount
+  useEffect(() => {
+    initMonitoring({
+      version: '1.0.0',
+      environment: import.meta.env.PROD ? 'production' : 'development',
+      tracesSampleRate: 0.1,
+    });
+    reportWebVitals();
+    addBreadcrumb('app', 'App mounted', 'info');
+  }, []);
 
   // Track pending bot action per player index to prevent duplicate scheduling
   const pendingRef = React.useRef<{
