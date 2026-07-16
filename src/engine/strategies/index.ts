@@ -34,3 +34,6 @@ export function initializeStrategies(): void {
     StrategyRegistry.register(strategy);
   }
 }
+
+// Auto-initialize on import
+initializeStrategies();
