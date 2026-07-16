@@ -150,7 +150,7 @@ const PlayerControls: React.FC = () => {
         <button
           onClick={() => doAction('fold', undefined, 'Folded')}
           disabled={!!humanPlayer?.folded || !isMyTurn || isActing}
-          className="btn-danger flex items-center gap-1.5"
+          className="btn-danger flex items-center gap-1.5 text-xs sm:text-sm"
         >
           {isActing ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />}
           Fold <span className="text-[10px] text-white/40 font-mono ml-1">F</span>
@@ -174,7 +174,7 @@ const PlayerControls: React.FC = () => {
           <button
             onClick={() => doAction('call', undefined, 'Called')}
             disabled={!isMyTurn || isActing}
-            className="btn-call flex items-center gap-1.5"
+            className="btn-call flex items-center gap-1.5 text-xs sm:text-sm"
           >
             {isActing ? <Loader2 size={15} className="animate-spin" /> : <DollarSign size={15} />}
             Call ${toCall} <span className="text-[10px] text-accent-blue/50 font-mono ml-1">C</span>
@@ -189,7 +189,7 @@ const PlayerControls: React.FC = () => {
           <button
             onClick={() => doAction('raise', raiseAmount || toCall * 2, `Raised $${(raiseAmount || toCall * 2).toLocaleString()}`)}
             disabled={!isMyTurn || isActing}
-            className="btn-primary flex items-center gap-1.5"
+            className="btn-primary flex items-center gap-1.5 text-xs sm:text-sm"
           >
             {isActing ? <Loader2 size={15} className="animate-spin text-black" /> : <TrendingUp size={15} />}
             Raise <span className="text-[10px] text-black/40 font-mono ml-1">R</span>
@@ -202,7 +202,7 @@ const PlayerControls: React.FC = () => {
           <button
             onClick={() => doAction('raise', (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0), 'ALL IN!')}
             disabled={!isMyTurn || isActing}
-            className="btn-allin flex items-center gap-1.5"
+            className="btn-allin flex items-center gap-1.5 text-xs sm:text-sm"
           >
             {isActing ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
             All In <span className="text-[10px] text-white/40 font-mono ml-1">A</span>

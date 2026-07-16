@@ -46,7 +46,7 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
         style={delayStyle}
       >
         {/* Card back — flat, no 3D flip */}
-        <div className="w-full h-full card-back-design rounded-xl border-2 border-indigo-400/30 shadow-card-premium flex items-center justify-center overflow-hidden relative">
+        <div className="w-full h-full card-back-design rounded-xl border-2 border-indigo-400/30 shadow-card flex items-center justify-center overflow-hidden relative">
           {/* Center diamond */}
           <div className="w-7 h-7 md:w-8 md:h-8 rotate-45 border-2 border-indigo-300/25 rounded-sm flex items-center justify-center bg-indigo-800/30">
             <div className="-rotate-45 text-indigo-300/50 text-base md:text-lg font-serif">♠</div>
@@ -65,7 +65,7 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
       style={delayStyle}
     >
       {/* Card front — flat, no 3D flip */}
-      <div className="w-full h-full bg-white rounded-xl border border-gray-200/70 shadow-card-premium flex flex-col items-center justify-between p-[3px] md:p-1 relative overflow-hidden">
+      <div className="w-full h-full bg-white rounded-xl border border-gray-200/70 shadow-card flex flex-col items-center justify-between p-[3px] md:p-1 relative overflow-hidden">
         {/* Top-left rank+suit */}
         <div className="self-start font-bold leading-tight" style={{ color: suitColor }}>
           {card.rank}
@@ -110,7 +110,7 @@ const ChipStack: React.FC<ChipStackProps> = React.memo(({ amount, size = 'md' })
   const displayChip = chipIdx >= 0 ? chipColors[chipIdx] : chipColors[chipColors.length - 1];
 
   // Stack layers for visual depth
-  const stackLayers = Math.min(4, Math.max(1, Math.ceil(amount / 100)));
+  const stackLayers = Math.min(5, Math.max(1, Math.ceil(amount / 100)));
 
   return (
     <div className="relative inline-flex flex-col items-center" title={`$${amount}`}>
@@ -118,7 +118,7 @@ const ChipStack: React.FC<ChipStackProps> = React.memo(({ amount, size = 'md' })
       {Array.from({ length: stackLayers - 1 }, (_, i) => (
         <div key={i}
           className={`${dims} poker-chip ${displayChip} absolute`}
-          style={{ bottom: `${(i + 1) * 3}px`, zIndex: -i - 1, opacity: 0.7 - i * 0.15 }}
+          style={{ bottom: `${(i + 1) * 3}px`, zIndex: -i - 1, opacity: Math.max(0.25, 0.7 - i * 0.12) }}
         />
       ))}
       {/* Top chip */}
@@ -162,7 +162,7 @@ const PotDisplay: React.FC<{
         <div className={`bg-black/40 backdrop-blur-md rounded-full px-5 py-1.5 border border-white/10 ${pulse ? 'animate-pot-pulse' : ''}`}>
           <span className="text-gold font-bold text-sm flex items-center gap-1">
             <Coins size={12} className="text-gold/70" />
-            ${pot}
+            ${pot.toLocaleString()}
           </span>
         </div>
       </div>
@@ -547,7 +547,7 @@ const PokerTable: React.FC = React.memo(() => {
   );
 
   return (
-    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)' }}>
+    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)', minWidth: '320px' }}>
       {/* ── Table ── */}
       <div className="absolute inset-0 rounded-[42%] bg-wood-rail border-[10px] border-[#2a1f15] shadow-table overflow-hidden">
         {/* Wood rail inner highlight */}
