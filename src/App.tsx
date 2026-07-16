@@ -5,13 +5,15 @@ import RiskOverlay from './components/RiskOverlay';
 import StatsDashboard from './components/StatsDashboard';
 import SettingsPanel from './components/SettingsPanel';
 import Card from './components/Card';
+import CoachTips from './components/CoachTips';
 import { useGameStore } from './store/gameStore';
-import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins } from 'lucide-react';
+import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle } from 'lucide-react';
 
 type Tab = 'play' | 'stats' | 'rules' | 'about' | 'settings';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('play');
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const isPlaying = useGameStore(s => s.isPlaying);
   const initializeGame = useGameStore(s => s.initializeGame);
   const startHand = useGameStore(s => s.startHand);
@@ -282,6 +284,14 @@ const App: React.FC = () => {
                 <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${autoPlayMode ? 'bg-white animate-pulse' : 'bg-text-secondary/30'}`} aria-hidden="true" />
                 AUTO
               </button>
+              <button
+                onClick={() => setShowShortcuts(true)}
+                aria-label="Keyboard shortcuts"
+                className="flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold bg-white/10 text-text-secondary/50 hover:text-text-primary transition-all"
+              >
+                <Keyboard size={12} />
+                <span className="hidden sm:inline">KEYS</span>
+              </button>
               <div className="flex items-center gap-1">
                 <span className="text-[9px] sm:text-[10px] text-text-secondary/60 font-semibold whitespace-nowrap">Rebuy:</span>
                 <input
@@ -368,6 +378,50 @@ const App: React.FC = () => {
       <footer className="border-t border-white/5 py-3 text-center">
         <p className="text-[10px] text-text-secondary/30 font-medium tracking-wide">POKERTRAINER — EDUCATIONAL SIMULATION. NO REAL MONEY.</p>
       </footer>
+
+      {/* Keyboard Shortcuts Modal */}
+      {showShortcuts && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowShortcuts(false)} />
+          <div className="relative bg-surface-elevated border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl animate-pop-in">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Keyboard size={18} className="text-gold" />
+                <h3 className="font-black text-lg">Keyboard Shortcuts</h3>
+              </div>
+              <button onClick={() => setShowShortcuts(false)} className="text-text-secondary/50 hover:text-text-primary transition-colors" aria-label="Close shortcuts">
+                <XCircle size={20} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { key: 'F', action: 'Fold', desc: 'Forfeit your hand', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+                { key: 'C', action: 'Call', desc: 'Match the current bet', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+                { key: 'X', action: 'Check', desc: 'Pass without betting (when no bet to call)', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+                { key: 'R', action: 'Raise', desc: 'Increase the bet (uses 2x call amount)', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+                { key: 'A', action: 'All-In', desc: 'Bet all your remaining chips', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+                { key: 'Esc', action: 'Cancel / Deselect', desc: 'Clear focus from any active control', color: 'bg-white/10 text-text-secondary/70 border-white/20' },
+              ].map(({ key, action, desc, color }) => (
+                <div key={key} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-all">
+                  <kbd className={`px-2.5 py-1.5 rounded-lg text-sm font-black font-mono border min-w-[2.5rem] text-center ${color}`}>
+                    {key}
+                  </kbd>
+                  <div>
+                    <div className="font-bold text-sm text-text-primary">{action}</div>
+                    <div className="text-[11px] text-text-secondary/50">{desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-text-secondary/30 mt-4 text-center">
+              Shortcuts only work when it's your turn and no input is focused.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Coach Tips Toast */}
+      <CoachTips />
     </div>
   );
 };
@@ -668,15 +722,43 @@ const getHandPercentile = (r1: number, r2: number, isPair: boolean, isSuited: bo
   return (RANK_CUMULATIVE[rank169 - 1] / TOTAL_COMBOS) * 100;
 };
 
-// HSL gradient: hue from 120 (green) to 0 (red) based on percentile
+// Perceptually-adjusted color gradient for starting hands matrix
+// Uses multi-stop interpolation for clear visual distinction between strength tiers
 const getCellColor = (pct: number) => {
-  const hue = 120 - (pct / 100) * 120;
-  const bgSat = pct < 10 ? 85 : pct < 30 ? 70 : pct < 60 ? 55 : 70;
-  const bgLight = pct < 15 ? 20 : pct < 40 ? 17 : 15;
-  const textLight = pct < 20 ? 78 : pct < 50 ? 70 : 65;
+  // Color stops: [percentile, hue, saturation, lightness_bg, lightness_text]
+  // Hue ranges from 140 (rich green) → 0 (red) with accelerated mid-range
+  const stops = [
+    // [pct,  hue,  sat%, lbg%, ltxt%]
+    [0,    140,   90,   22,   85],  // AA: Premium - rich green, brightest
+    [5,    130,   85,   20,   82],  // Premium boundary
+    [12,   100,   75,   18,   78],  // Strong
+    [25,    60,   65,   16,   74],  // Playable - yellow-green
+    [45,    30,   55,   15,   70],  // Marginal - amber
+    [70,    10,   60,   14,   65],  // Weak - orange-red
+    [100,    0,   70,   13,   60],  // Trash - red, darkest
+  ];
+
+  // Clamp percentile
+  const t = Math.max(0, Math.min(100, pct));
+
+  // Find the two stops to interpolate between
+  let i = 0;
+  while (i < stops.length - 1 && stops[i + 1][0] < t) i++;
+  const [p0, h0, s0, lb0, lt0] = stops[i];
+  const [p1, h1, s1, lb1, lt1] = stops[i + 1];
+
+  // Linear interpolation factor
+  const range = p1 - p0;
+  const f = range === 0 ? 0 : (t - p0) / range;
+
+  const hue = h0 + (h1 - h0) * f;
+  const sat = s0 + (s1 - s0) * f;
+  const bgLight = lb0 + (lb1 - lb0) * f;
+  const textLight = lt0 + (lt1 - lt0) * f;
+
   return {
-    bg: `hsl(${hue}, ${bgSat}%, ${bgLight}%)`,
-    text: `hsl(${hue}, 80%, ${textLight}%)`,
+    bg: `hsl(${hue}, ${sat}%, ${bgLight}%)`,
+    text: `hsl(${hue}, ${Math.max(60, sat - 10)}%, ${textLight}%)`,
   };
 };
 

@@ -1,17 +1,20 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { TrendingUp, DollarSign, Hash, Clock, ChevronRight } from 'lucide-react';
+import { TrendingUp, DollarSign, Hash, Clock, ChevronRight, Search, Download, Filter, ArrowUpDown } from 'lucide-react';
 
 type FilterType = 'all' | 'win' | 'loss';
+type SortField = 'handNumber' | 'potSize' | 'botResult' | 'winner' | 'numPlayers';
 
 const GameHistory: React.FC = React.memo(() => {
   const gameHistory = useGameStore(s => s.gameHistory);
   const [filter, setFilter] = useState<FilterType>('all');
-  const [sortField, setSortField] = useState<'handNumber' | 'potSize' | 'botResult'>('handNumber');
+  const [sortField, setSortField] = useState<SortField>('handNumber');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [expandedHand, setExpandedHand] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const toggleSort = useCallback((field: typeof sortField) => {
+  const toggleSort = useCallback((field: SortField) => {
     setSortField(prev => {
       if (prev === field) {
         setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -27,15 +30,72 @@ const GameHistory: React.FC = React.memo(() => {
     if (filter === 'win') entries = entries.filter(e => e.botResult > 0);
     if (filter === 'loss') entries = entries.filter(e => e.botResult < 0);
 
+    // Search by hand pattern or winner name
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      entries = entries.filter(e =>
+        e.winner.toLowerCase().includes(q) ||
+        e.winningHand.toLowerCase().includes(q) ||
+        String(e.handNumber).includes(q) ||
+        String(e.potSize).includes(q) ||
+        String(e.numPlayers).includes(q)
+      );
+    }
+
     entries.sort((a, b) => {
-      const aVal = a[sortField];
-      const bVal = b[sortField];
-      const cmp = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+      let aVal: string | number = (a as any)[sortField] ?? '';
+      let bVal: string | number = (b as any)[sortField] ?? '';
+
+      // String comparison for winner field
+      if (sortField === 'winner') {
+        aVal = (a.winner || '').toLowerCase();
+        bVal = (b.winner || '').toLowerCase();
+        const cmp = (aVal as string) > (bVal as string) ? 1 : (aVal as string) < (bVal as string) ? -1 : 0;
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+
+      const cmp = (aVal as number) > (bVal as number) ? 1 : (aVal as number) < (bVal as number) ? -1 : 0;
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
     return entries;
-  }, [gameHistory, filter, sortField, sortDir]);
+  }, [gameHistory, filter, sortField, sortDir, searchQuery]);
+
+  // CSV export
+  const exportHistoryCSV = useCallback(() => {
+    const headers = ['Hand #', 'Winner', 'Winning Hand', 'Pot Size', 'Result', 'Players'];
+    const rows = filteredHistory.map(e => [
+      String(e.handNumber),
+      e.winner,
+      e.winningHand,
+      `$${e.potSize}`,
+      `${e.botResult >= 0 ? '+' : ''}${e.botResult}`,
+      String(e.numPlayers),
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pokertrainer-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  }, [filteredHistory]);
+
+  // Compare two hands (simple diff view)
+  const [compareA, setCompareA] = useState<number | null>(null);
+  const [compareB, setCompareB] = useState<number | null>(null);
+
+  const toggleCompare = useCallback((handNum: number) => {
+    if (compareA === handNum) { setCompareA(null); return; }
+    if (compareB === handNum) { setCompareB(null); return; }
+    if (compareA === null) { setCompareA(handNum); return; }
+    if (compareB === null) { setCompareB(handNum); return; }
+    setCompareA(handNum); setCompareB(null); // Replace oldest
+  }, [compareA, compareB]);
 
   const summary = useMemo(() => {
     const total = gameHistory.length;
@@ -56,7 +116,7 @@ const GameHistory: React.FC = React.memo(() => {
     );
   }
 
-  const SortHeader: React.FC<{ field: typeof sortField; label: string; icon?: React.ReactNode }> = ({ field, label, icon }) => (
+  const SortHeader: React.FC<{ field: SortField; label: string; icon?: React.ReactNode }> = ({ field, label, icon }) => (
     <button
       onClick={() => toggleSort(field)}
       className="flex items-center gap-1 text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold hover:text-text-secondary transition-colors group"
@@ -124,29 +184,78 @@ const GameHistory: React.FC = React.memo(() => {
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-white/5 rounded-lg p-0.5 border border-white/5 w-fit">
-        {([
-          { value: 'all' as FilterType, label: 'All', count: summary.total },
-          { value: 'win' as FilterType, label: 'Wins', count: summary.wins },
-          { value: 'loss' as FilterType, label: 'Losses', count: summary.losses },
-        ]).map(f => (
+      {/* Search + Filter + Export */}
+      <div className="flex gap-2 flex-wrap items-center">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[140px] max-w-[240px]">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary/30" />
+          <input
+            type="text"
+            placeholder="Search hands..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-text-primary placeholder:text-text-secondary/30 focus:outline-none focus:border-gold/50 transition-colors"
+          />
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-1 bg-white/5 rounded-lg p-0.5 border border-white/5">
+          {([
+            { value: 'all' as FilterType, label: 'All', count: summary.total },
+            { value: 'win' as FilterType, label: 'Wins', count: summary.wins },
+            { value: 'loss' as FilterType, label: 'Losses', count: summary.losses },
+          ]).map(f => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                filter === f.value
+                  ? 'bg-gold text-black'
+                  : 'text-text-secondary/60 hover:text-text-primary'
+              }`}
+            >
+              {f.label}
+              <span className={`text-[10px] ${filter === f.value ? 'text-black/50' : 'text-text-secondary/30'}`}>
+                {f.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Export button */}
+        <div className="relative">
           <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              filter === f.value
-                ? 'bg-gold text-black'
-                : 'text-text-secondary/60 hover:text-text-primary'
-            }`}
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] text-text-secondary/50 hover:text-gold hover:border-gold/30 transition-all"
           >
-            {f.label}
-            <span className={`text-[10px] ${filter === f.value ? 'text-black/50' : 'text-text-secondary/30'}`}>
-              {f.count}
-            </span>
+            <Download size={12} />
+            <span className="hidden sm:inline">CSV</span>
           </button>
-        ))}
+          {showExportMenu && (
+            <div className="absolute right-0 top-full mt-1 bg-surface-elevated border border-white/10 rounded-xl p-1.5 shadow-xl z-50 min-w-[160px]">
+              <button onClick={exportHistoryCSV} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors">
+                Export filtered results (.csv)
+              </button>
+              <button onClick={() => { setFilter('all'); setSearchQuery(''); setShowExportMenu(false); }} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors">
+                Clear all filters
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Comparison mode indicator */}
+      {(compareA || compareB) && (
+        <div className="flex items-center gap-2 text-[10px] text-text-secondary/50 bg-amber-500/5 border border-amber-500/10 rounded-lg px-3 py-1.5">
+          <ArrowUpDown size={12} className="text-amber-400" />
+          <span>Compare: </span>
+          {compareA && <span className="font-mono text-gold font-bold">#{compareA}</span>}
+          {compareA && compareB && <span className="text-text-secondary/30">vs</span>}
+          {compareB && <span className="font-mono text-cyan-400 font-bold">#{compareB}</span>}
+          {(!compareA || !compareB) && <span className="text-text-secondary/30">(select a second hand to compare)</span>}
+          <button onClick={() => { setCompareA(null); setCompareB(null); }} className="ml-auto text-text-secondary/30 hover:text-accent-red transition-colors">Clear</button>
+        </div>
+      )}
 
       {/* History table */}
       <div className="overflow-x-auto -mx-1">
@@ -154,12 +263,13 @@ const GameHistory: React.FC = React.memo(() => {
           <thead>
             <tr>
               <th className="w-8"></th>
+              <th className="w-6"></th>
               <th><SortHeader field="handNumber" label="#" icon={<Hash size={10} />} /></th>
-              <th>Winner</th>
+              <th><SortHeader field="winner" label="Winner" /></th>
               <th>Hand</th>
               <th><SortHeader field="potSize" label="Pot" icon={<DollarSign size={10} />} /></th>
               <th><SortHeader field="botResult" label="Result" /></th>
-              <th>Players</th>
+              <th><SortHeader field="numPlayers" label="Pl." /></th>
             </tr>
           </thead>
           <tbody>
@@ -172,8 +282,20 @@ const GameHistory: React.FC = React.memo(() => {
                     className={`${rowClass} cursor-pointer transition-colors`}
                     onClick={() => setExpandedHand(isExpanded ? null : entry.handNumber)}
                   >
-                    <td className="text-center">
+                    <td className="text-center" onClick={e => e.stopPropagation()}>
                       <ResultDot result={entry.botResult} />
+                    </td>
+                    <td className="text-center" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => toggleCompare(entry.handNumber)}
+                        className={`w-4 h-4 rounded border transition-all ${
+                          compareA === entry.handNumber || compareB === entry.handNumber
+                            ? 'bg-gold border-gold'
+                            : 'border-white/20 hover:border-gold/50'
+                        }`}
+                        title="Select to compare"
+                        aria-label={`Compare hand #${entry.handNumber}`}
+                      />
                     </td>
                     <td className="font-mono font-bold text-xs">
                       <button

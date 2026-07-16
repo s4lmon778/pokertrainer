@@ -69,12 +69,37 @@ const PlayerControls: React.FC = React.memo(() => {
       if (gameState.players[gameState.currentPlayerIndex]?.id !== humanPlayer.id) return;
       if (isActing) return;
 
-      switch (e.key.toLowerCase()) {
-        case 'f': doAction('fold', undefined, 'Folded'); break;
-        case 'c': doAction('call', undefined, 'Called'); break;
-        case 'x': doAction('check', undefined, 'Checked'); break;
-        case 'r': { const tc = gameState.currentBet - humanPlayer.bet; doAction('raise', Math.min(tc * 2, humanPlayer.chips), 'Raised'); break; }
-        case 'a': doAction('raise', humanPlayer.chips + humanPlayer.bet, 'ALL IN!'); break;
+      // Ignore if user is typing in an input field
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target as HTMLElement)?.isContentEditable) return;
+
+      const key = e.key.toLowerCase();
+
+      switch (key) {
+        case 'f':
+          e.preventDefault();
+          doAction('fold', undefined, 'Folded');
+          break;
+        case 'c':
+          e.preventDefault();
+          doAction('call', undefined, 'Called');
+          break;
+        case 'x':
+          e.preventDefault();
+          doAction('check', undefined, 'Checked');
+          break;
+        case 'r':
+          e.preventDefault();
+          { const tc = gameState.currentBet - humanPlayer.bet; doAction('raise', Math.min(tc * 2, humanPlayer.chips), 'Raised'); }
+          break;
+        case 'a':
+          e.preventDefault();
+          doAction('raise', humanPlayer.chips + humanPlayer.bet, 'ALL IN!');
+          break;
+        case 'escape':
+          // Blur any focused element, cancel pending action
+          (e.target as HTMLElement)?.blur?.();
+          break;
       }
     };
     window.addEventListener('keydown', handler);

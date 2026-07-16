@@ -1,12 +1,66 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
-import { Activity, BarChart3, Brain, User, FlaskConical, History } from 'lucide-react';
+import { Activity, BarChart3, Brain, User, FlaskConical, History, Download } from 'lucide-react';
 import GameHistory from './GameHistory';
 
 const tooltipStyle = {
-  contentStyle: { backgroundColor: '#1a1d27', border: '1px solid #2a2d3a', borderRadius: '8px' },
-  labelStyle: { color: '#94a3b8' },
+  contentStyle: { backgroundColor: '#1a1d27', border: '1px solid #2a2d3a', borderRadius: '8px', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' },
+  labelStyle: { color: '#94a3b8', fontWeight: 600 },
+  itemStyle: { color: '#e2e8f0' },
+};
+
+// ── Custom Tooltip Components ──
+
+const CustomPieTooltip: React.FC<{ active?: boolean; payload?: Array<{ name: string; value: number; payload: { color: string } }> }> = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0];
+  return (
+    <div className="bg-surface-elevated border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      <div className="flex items-center gap-1.5">
+        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.payload.color }} />
+        <span className="text-xs font-semibold text-text-secondary">{d.name}</span>
+        <span className="text-xs font-black text-text-primary ml-1">{d.value}</span>
+      </div>
+    </div>
+  );
+};
+
+const CustomBarTooltip: React.FC<{ active?: boolean; payload?: Array<{ payload: { phase: string; accuracy: number; total: number } }>; label?: string }> = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-surface-elevated border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      <div className="text-xs font-bold text-gold mb-0.5">{label}</div>
+      <div className="text-xs text-text-secondary">Accuracy: <span className="font-mono font-bold text-text-primary">{d.accuracy.toFixed(0)}%</span></div>
+      <div className="text-xs text-text-secondary">Samples: <span className="font-mono font-bold text-text-primary">{d.total}</span></div>
+    </div>
+  );
+};
+
+const CustomLineTooltip: React.FC<{ active?: boolean; payload?: Array<{ value: number }>; label?: string }> = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-surface-elevated border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      <div className="text-xs font-bold text-gold mb-0.5">Hand #{label}</div>
+      <div className="text-xs text-text-secondary">Bankroll: <span className="font-mono font-bold text-text-primary">${payload[0].value.toLocaleString()}</span></div>
+    </div>
+  );
+};
+
+// ── CSV Export Helper ──
+
+const downloadCSV = (filename: string, headers: string[], rows: string[][]) => {
+  const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 const StatsDashboard: React.FC = React.memo(() => {
@@ -49,6 +103,41 @@ const StatsDashboard: React.FC = React.memo(() => {
 
   const pnl = currentBankroll - startingBankroll;
 
+  // ── CSV Export Handlers ──
+
+  const exportPlayerStats = useCallback(() => {
+    const rows = [
+      ['Hands Played', String(stats.totalHands)],
+      ['Win Rate', `${stats.winRate.toFixed(1)}%`],
+      ['Current Bankroll', `$${currentBankroll}`],
+      ['ROI', `${stats.roi.toFixed(1)}%`],
+      ['P/L', `${pnl >= 0 ? '+' : ''}$${pnl}`],
+      ['Biggest Win', `$${stats.biggestWin}`],
+      ['Biggest Loss', `-$${Math.abs(stats.biggestLoss)}`],
+      ['Avg Pot Size', `$${stats.avgPotSize.toFixed(0)}`],
+      ['Total Bets', String(stats.totalBets)],
+      ['Total Calls', String(stats.totalCalls)],
+      ['Total Folds', String(stats.totalFolds)],
+    ];
+    downloadCSV('pokertrainer-player-stats.csv', ['Metric', 'Value'], rows);
+  }, [stats, currentBankroll, pnl]);
+
+  const exportBankrollHistory = useCallback(() => {
+    const rows = stats.bankrollHistory.map((val, i) => [`Hand ${i + 1}`, `$${val}`]);
+    downloadCSV('pokertrainer-bankroll-history.csv', ['Hand', 'Bankroll'], rows);
+  }, [stats.bankrollHistory]);
+
+  const exportTbotStats = useCallback(() => {
+    const rows = [
+      ['Hands Played', String(tbotStats.handsPlayed)],
+      ['Win Rate', `${tbotStats.winRate.toFixed(1)}%`],
+      ['Wins', String(tbotStats.handsWon)],
+      ['Losses', String(tbotStats.handsLost)],
+      ['Total Profit', `$${tbotStats.totalProfit}`],
+    ];
+    downloadCSV('pokertrainer-tbot-stats.csv', ['Metric', 'Value'], rows);
+  }, [tbotStats]);
+
   // Empty state
   if (stats.totalHands === 0 && tbotStats.handsPlayed === 0) {
     return (
@@ -68,9 +157,14 @@ const StatsDashboard: React.FC = React.memo(() => {
     <div className="space-y-4 animate-fade-in">
       {/* Player Summary */}
       <div className="card-premium">
-        <div className="flex items-center gap-2 mb-3">
-          <User size={16} className="text-gold" />
-          <span className="font-bold text-sm">Your Stats</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <User size={16} className="text-gold" />
+            <span className="font-bold text-sm">Your Stats</span>
+          </div>
+          <button onClick={exportPlayerStats} className="flex items-center gap-1 text-[10px] text-text-secondary/40 hover:text-gold transition-colors" aria-label="Export player stats CSV">
+            <Download size={12} /> CSV
+          </button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
@@ -90,11 +184,16 @@ const StatsDashboard: React.FC = React.memo(() => {
 
       {/* T-Bot Summary */}
       <div className="card-premium border-cyan-500/20">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
-            <FlaskConical size={12} className="text-white" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
+              <FlaskConical size={12} className="text-white" />
+            </div>
+            <span className="font-bold text-sm text-cyan-400">T-Bot Stats</span>
           </div>
-          <span className="font-bold text-sm text-cyan-400">T-Bot Stats</span>
+          <button onClick={exportTbotStats} className="flex items-center gap-1 text-[10px] text-text-secondary/40 hover:text-cyan-400 transition-colors" aria-label="Export T-Bot stats CSV">
+            <Download size={12} /> CSV
+          </button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
@@ -127,7 +226,7 @@ const StatsDashboard: React.FC = React.memo(() => {
                   <Pie data={pieData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={2} dataKey="value">
                     {pieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
                   </Pie>
-                  <Tooltip {...tooltipStyle} />
+                  <Tooltip content={<CustomPieTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex justify-center gap-4 text-xs">
@@ -155,7 +254,7 @@ const StatsDashboard: React.FC = React.memo(() => {
                   <Pie data={tbotPieData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={2} dataKey="value">
                     {tbotPieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
                   </Pie>
-                  <Tooltip {...tooltipStyle} />
+                  <Tooltip content={<CustomPieTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex justify-center gap-4 text-xs">
@@ -171,16 +270,23 @@ const StatsDashboard: React.FC = React.memo(() => {
 
       {/* Bankroll History */}
       <div className="card-premium">
-        <div className="flex items-center gap-2 mb-3">
-          <BarChart3 size={16} className="text-gold" />
-          <span className="font-bold text-sm">Your Bankroll History</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <BarChart3 size={16} className="text-gold" />
+            <span className="font-bold text-sm">Your Bankroll History</span>
+          </div>
+          {bankrollData.length > 0 && (
+            <button onClick={exportBankrollHistory} className="flex items-center gap-1 text-[10px] text-text-secondary/40 hover:text-gold transition-colors" aria-label="Export bankroll history CSV">
+              <Download size={12} /> CSV
+            </button>
+          )}
         </div>
         {bankrollData.length > 0 ? (
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={bankrollData}>
               <XAxis dataKey="hand" tick={{ fontSize: 10, fill: '#94a3b8' }} />
               <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-              <Tooltip {...tooltipStyle} />
+              <Tooltip content={<CustomLineTooltip />} />
               <Line type="monotone" dataKey="bankroll" stroke="#d4af37" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#d4af37' }} />
             </LineChart>
           </ResponsiveContainer>
@@ -200,7 +306,7 @@ const StatsDashboard: React.FC = React.memo(() => {
             <BarChart data={accuracyByPhase}>
               <XAxis dataKey="phase" tick={{ fontSize: 10, fill: '#94a3b8' }} />
               <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} domain={[0, 100]} />
-              <Tooltip {...tooltipStyle} />
+              <Tooltip content={<CustomBarTooltip />} />
               <Bar dataKey="accuracy" fill="#d4af37" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

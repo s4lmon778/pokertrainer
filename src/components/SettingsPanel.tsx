@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
-import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users } from 'lucide-react';
+import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp } from 'lucide-react';
 
 const SettingsPanel: React.FC = React.memo(() => {
   const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
@@ -280,6 +280,9 @@ const SettingsPanel: React.FC = React.memo(() => {
       </div>
       </div>
 
+      {/* ===== TRAINING BOT ADVANCED CONFIG (STUBBED) ===== */}
+      <AdvancedBotConfig />
+
       {/* Reset */}
       <button onClick={resetStats}
         className="btn-ghost w-full flex items-center justify-center gap-2 text-accent-red border-accent-red/30 hover:bg-accent-red/10 hover:text-accent-red hover:border-accent-red/50">
@@ -290,5 +293,153 @@ const SettingsPanel: React.FC = React.memo(() => {
 });
 
 SettingsPanel.displayName = 'SettingsPanel';
+
+// ── Advanced Training Bot Configuration (Stubbed for future development) ──
+
+interface BotParamDef {
+  key: string;
+  label: string;
+  description: string;
+  range: string;
+  default: string;
+  unit?: string;
+  category: 'core' | 'behavior' | 'timing' | 'advanced';
+}
+
+const FUTURE_BOT_PARAMS: BotParamDef[] = [
+  // Core parameters
+  { key: 'skillLevel', label: 'Skill Level', description: 'Overall bot playing strength from beginner to expert', range: '1–100', default: '50', unit: '/100', category: 'core' },
+  { key: 'gtoVsExploitative', label: 'GTO vs Exploitative Ratio', description: 'Balance between game-theory-optimal and exploitative play', range: '0–100', default: '60', unit: '% GTO', category: 'core' },
+  { key: 'aggressionFactor', label: 'Aggression Factor', description: 'How aggressively the bot bets and raises (already partially implemented)', range: '0.0–3.0', default: '1.5', unit: 'x', category: 'core' },
+  { key: 'bluffFrequency', label: 'Bluff Frequency', description: 'How often the bot bluffs in neutral spots (already partially implemented)', range: '0–30', default: '8', unit: '%', category: 'core' },
+
+  // Behavior parameters
+  { key: 'tightLoose', label: 'Tight/Loose Tendency', description: 'Preflop hand selection range width', range: '0–100', default: '50', unit: '/100', category: 'behavior' },
+  { key: 'riskTolerance', label: 'Risk Tolerance', description: 'Willingness to put chips at risk in marginal spots', range: '0–100', default: '40', unit: '/100', category: 'behavior' },
+  { key: 'foldToThreeBet', label: 'Fold to 3-Bet %', description: 'How often the bot folds when facing a 3-bet', range: '0–100', default: '50', unit: '%', category: 'behavior' },
+  { key: 'continuationBetFreq', label: 'C-Bet Frequency', description: 'How often the bot continuation-bets as the preflop raiser', range: '0–100', default: '65', unit: '%', category: 'behavior' },
+  { key: 'checkRaiseFreq', label: 'Check-Raise Frequency', description: 'How often the bot check-raises', range: '0–30', default: '8', unit: '%', category: 'behavior' },
+  { key: 'floatFreq', label: 'Float Frequency', description: 'How often the bot calls a c-bet to bluff later streets', range: '0–40', default: '15', unit: '%', category: 'behavior' },
+
+  // Timing parameters
+  { key: 'reactionTimeMin', label: 'Min Reaction Time', description: 'Minimum delay before bot acts (already partially implemented)', range: '0.1–5.0', default: '0.5', unit: 's', category: 'timing' },
+  { key: 'reactionTimeMax', label: 'Max Reaction Time', description: 'Maximum delay before bot acts (already partially implemented)', range: '0.5–10.0', default: '3.0', unit: 's', category: 'timing' },
+  { key: 'tankFrequency', label: 'Tank Frequency', description: 'How often the bot takes extra time (simulating difficult decisions)', range: '0–50', default: '10', unit: '%', category: 'timing' },
+  { key: 'snapActionFrequency', label: 'Snap Action Frequency', description: 'How often the bot acts instantly', range: '0–50', default: '20', unit: '%', category: 'timing' },
+
+  // Advanced parameters
+  { key: 'humanizationLevel', label: 'Humanization Level', description: 'How much randomness/variance is injected to mimic human play patterns', range: '0–100', default: '40', unit: '/100', category: 'advanced' },
+  { key: 'balanceRandomization', label: 'Balance Randomization', description: 'How much the bot randomly mixes between similar EV actions', range: '0–100', default: '25', unit: '/100', category: 'advanced' },
+  { key: 'learningRate', label: 'Learning Rate', description: 'How quickly the bot adapts to opponent tendencies over a session', range: '0–100', default: '0', unit: '/100', category: 'advanced' },
+  { key: 'positionAwareness', label: 'Position Awareness', description: 'How much the bot adjusts strategy based on table position', range: '0–100', default: '70', unit: '/100', category: 'advanced' },
+  { key: 'stackSizeAwareness', label: 'Stack Size Awareness', description: 'How much the bot adjusts for effective stack depth', range: '0–100', default: '60', unit: '/100', category: 'advanced' },
+  { key: 'icmConsideration', label: 'ICM Consideration', description: 'How tournament ICM pressure affects decisions (future tournament mode)', range: '0–100', default: '0', unit: '/100', category: 'advanced' },
+];
+
+const CATEGORY_LABELS: Record<BotParamDef['category'], string> = {
+  core: 'Core Parameters',
+  behavior: 'Behavior Parameters',
+  timing: 'Timing Parameters',
+  advanced: 'Advanced Parameters',
+};
+
+const CATEGORY_COLORS: Record<BotParamDef['category'], string> = {
+  core: 'border-cyan-500/30 bg-cyan-500/5',
+  behavior: 'border-amber-500/30 bg-amber-500/5',
+  timing: 'border-blue-500/30 bg-blue-500/5',
+  advanced: 'border-purple-500/30 bg-purple-500/5',
+};
+
+const AdvancedBotConfig: React.FC = React.memo(() => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="card border-dashed border-white/10">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between gap-2"
+      >
+        <div className="flex items-center gap-2">
+          <Wrench size={16} className="text-text-secondary/50" />
+          <span className="font-bold text-sm text-text-secondary/70">Advanced Training Bot Config</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-bold uppercase border border-amber-500/20">
+            TODO
+          </span>
+        </div>
+        {isExpanded ? <ChevronUp size={16} className="text-text-secondary/50" /> : <ChevronDown size={16} className="text-text-secondary/50" />}
+      </button>
+
+      {isExpanded && (
+        <div className="mt-4 space-y-4 animate-fade-in">
+          <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3">
+            <p className="text-xs text-text-secondary/70 leading-relaxed">
+              <strong className="text-amber-400">Future Feature:</strong> These parameters define the full training bot personality model.
+              Currently, only <strong>Aggression</strong>, <strong>Bluff Frequency</strong>, <strong>Mistake Rate</strong>, and <strong>Reaction Time</strong>
+              are implemented. The remaining parameters are documented below as integration targets for future development.
+            </p>
+          </div>
+
+          {/* Integration points */}
+          <div className="bg-purple-500/5 border border-purple-500/10 rounded-xl p-3">
+            <p className="text-[10px] text-purple-300/70 font-bold uppercase tracking-wider mb-1">Integration Points</p>
+            <div className="text-xs text-text-secondary/60 space-y-1 font-mono">
+              <p>• <code className="text-purple-300/80">src/utils/botEngine.ts</code> — <code>BotSettings</code> interface and <code>botDecision()</code></p>
+              <p>• <code className="text-purple-300/80">src/store/gameStore.ts</code> — <code>trainingBotSettings</code> state + persistence</p>
+              <p>• <code className="text-purple-300/80">src/components/SettingsPanel.tsx</code> — UI controls for each parameter</p>
+            </div>
+          </div>
+
+          {/* Parameters by category */}
+          {(['core', 'behavior', 'timing', 'advanced'] as BotParamDef['category'][]).map(cat => {
+            const params = FUTURE_BOT_PARAMS.filter(p => p.category === cat);
+            return (
+              <div key={cat}>
+                <h4 className="text-xs font-bold text-text-secondary/50 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${cat === 'core' ? 'bg-cyan-500' : cat === 'behavior' ? 'bg-amber-500' : cat === 'timing' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+                  {CATEGORY_LABELS[cat]}
+                </h4>
+                <div className={`rounded-xl border ${CATEGORY_COLORS[cat]} overflow-hidden`}>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="text-left p-2 text-text-secondary/40 font-semibold">Parameter</th>
+                        <th className="text-left p-2 text-text-secondary/40 font-semibold hidden sm:table-cell">Description</th>
+                        <th className="text-center p-2 text-text-secondary/40 font-semibold">Range</th>
+                        <th className="text-center p-2 text-text-secondary/40 font-semibold">Default</th>
+                        <th className="text-center p-2 text-text-secondary/40 font-semibold w-16">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {params.map(p => {
+                        const isImplemented = ['aggressionFactor', 'bluffFrequency', 'mistakeRate', 'reactionTimeMin', 'reactionTimeMax'].includes(p.key);
+                        return (
+                          <tr key={p.key} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                            <td className="p-2 font-semibold text-text-primary/80">{p.label}</td>
+                            <td className="p-2 text-text-secondary/50 hidden sm:table-cell">{p.description}</td>
+                            <td className="p-2 text-center font-mono text-text-secondary/60">{p.range}{p.unit ? ` ${p.unit}` : ''}</td>
+                            <td className="p-2 text-center font-mono text-text-secondary/60">{p.default}{p.unit ? ` ${p.unit}` : ''}</td>
+                            <td className="p-2 text-center">
+                              {isImplemented ? (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 font-bold border border-green-500/20">DONE</span>
+                              ) : (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-bold border border-amber-500/20">TODO</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+
+AdvancedBotConfig.displayName = 'AdvancedBotConfig';
 
 export default SettingsPanel;
