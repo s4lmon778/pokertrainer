@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { TrendingUp, DollarSign, Hash, Clock, ChevronRight, Search, Download, Filter, ArrowUpDown } from 'lucide-react';
+import { TrendingUp, DollarSign, Hash, Clock, ChevronRight, Search, Download, Filter, ArrowUpDown, FileText, BarChart3 } from 'lucide-react';
 
 type FilterType = 'all' | 'win' | 'loss';
 type SortField = 'handNumber' | 'potSize' | 'botResult' | 'winner' | 'numPlayers';
@@ -63,7 +63,7 @@ const GameHistory: React.FC = React.memo(() => {
 
   // CSV export
   const exportHistoryCSV = useCallback(() => {
-    const headers = ['Hand #', 'Winner', 'Winning Hand', 'Pot Size', 'Result', 'Players'];
+    const headers = ['Hand #', 'Winner', 'Winning Hand', 'Pot Size', 'Result', 'Players', 'Position', 'Hand Category'];
     const rows = filteredHistory.map(e => [
       String(e.handNumber),
       e.winner,
@@ -71,6 +71,8 @@ const GameHistory: React.FC = React.memo(() => {
       `$${e.potSize}`,
       `${e.botResult >= 0 ? '+' : ''}${e.botResult}`,
       String(e.numPlayers),
+      e.humanPosition || '',
+      e.humanHandCategory || '',
     ]);
     const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -84,6 +86,98 @@ const GameHistory: React.FC = React.memo(() => {
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
   }, [filteredHistory]);
+
+  // PGN export (Poker Game Notation)
+  const exportHistoryPGN = useCallback(() => {
+    const lines: string[] = [];
+    const now = new Date().toISOString();
+    lines.push(`[Event "PokerTrainer Session"]`);
+    lines.push(`[Site "PokerTrainer"]`);
+    lines.push(`[Date "${now.slice(0, 10)}"]`);
+    lines.push(`[Time "${now.slice(11, 19)}"]`);
+    lines.push(`[Game "Texas Hold'em No Limit"]`);
+    lines.push(`[Hands "${filteredHistory.length}"]`);
+    lines.push('');
+
+    filteredHistory.forEach(e => {
+      const resultLabel = e.botResult > 0 ? '+$' + e.botResult : e.botResult < 0 ? '-$' + Math.abs(e.botResult) : 'breakeven';
+      lines.push(`[Hand "${e.handNumber}"]`);
+      lines.push(`[Hand-Pot "$${e.potSize}"]`);
+      lines.push(`[Hand-Winner "${e.winner}"]`);
+      lines.push(`[Hand-Hand "${e.winningHand}"]`);
+      lines.push(`[Hand-Result "${resultLabel}"]`);
+      if (e.humanPosition) lines.push(`[Hand-Position "${e.humanPosition}"]`);
+      if (e.humanHandCategory) lines.push(`[Hand-Category "${e.humanHandCategory}"]`);
+      lines.push('');
+    });
+
+    const content = lines.join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pokertrainer-history-${new Date().toISOString().slice(0, 10)}.pgn`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  }, [filteredHistory]);
+
+  // Session summary text
+  const sessionSummary = useMemo(() => {
+    const total = gameHistory.length;
+    if (total === 0) return '';
+    const wins = gameHistory.filter(e => e.botResult > 0).length;
+    const losses = gameHistory.filter(e => e.botResult < 0).length;
+    const totalProfit = gameHistory.reduce((s, e) => s + e.botResult, 0);
+    const totalPots = gameHistory.reduce((s, e) => s + e.potSize, 0);
+    const avgPot = total > 0 ? totalPots / total : 0;
+    const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0';
+    const biggestWin = Math.max(0, ...gameHistory.map(e => e.botResult));
+    const biggestLoss = Math.min(0, ...gameHistory.map(e => e.botResult));
+
+    const lines = [
+      '═══════════════════════════════════',
+      '  POKERTRAINER SESSION SUMMARY',
+      '═══════════════════════════════════',
+      `  Date: ${new Date().toLocaleDateString()}`,
+      `  Total Hands: ${total}`,
+      `  Wins: ${wins}  |  Losses: ${losses}  |  Win Rate: ${winRate}%`,
+      `  Total Profit: ${totalProfit >= 0 ? '+' : ''}$${totalProfit}`,
+      `  Biggest Win: +$${biggestWin}  |  Biggest Loss: -$${Math.abs(biggestLoss)}`,
+      `  Avg Pot Size: $${avgPot.toFixed(0)}`,
+      '───────────────────────────────────',
+    ];
+
+    // Per-position breakdown if available
+    const posEntries = gameHistory.filter(e => e.humanPosition);
+    if (posEntries.length > 0) {
+      lines.push('  Position Breakdown:');
+      const posMap: Record<string, { hands: number; profit: number }> = {};
+      posEntries.forEach(e => {
+        const p = e.humanPosition || '?';
+        if (!posMap[p]) posMap[p] = { hands: 0, profit: 0 };
+        posMap[p].hands++;
+        posMap[p].profit += e.botResult;
+      });
+      Object.entries(posMap)
+        .sort(([, a], [, b]) => b.profit - a.profit)
+        .forEach(([pos, d]) => {
+          const wr = d.hands > 0 ? ((posEntries.filter(e => e.botResult > 0 && e.humanPosition === pos).length / d.hands) * 100).toFixed(0) : '0';
+          lines.push(`    ${pos}: ${d.hands}h, ${wr}% WR, ${d.profit >= 0 ? '+' : ''}$${d.profit}`);
+        });
+    }
+
+    lines.push('═══════════════════════════════════');
+    return lines.join('\n');
+  }, [gameHistory]);
+
+  const copySessionSummary = useCallback(() => {
+    navigator.clipboard.writeText(sessionSummary).then(() => {
+      setShowExportMenu(false);
+    }).catch(() => { /* noop */ });
+  }, [sessionSummary]);
 
   // Compare two hands (simple diff view)
   const [compareA, setCompareA] = useState<number | null>(null);
@@ -232,10 +326,19 @@ const GameHistory: React.FC = React.memo(() => {
             <span className="hidden sm:inline">CSV</span>
           </button>
           {showExportMenu && (
-            <div className="absolute right-0 top-full mt-1 bg-surface-elevated border border-white/10 rounded-xl p-1.5 shadow-xl z-50 min-w-[160px]">
-              <button onClick={exportHistoryCSV} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors">
-                Export filtered results (.csv)
+            <div className="absolute right-0 top-full mt-1 bg-surface-elevated border border-white/10 rounded-xl p-1.5 shadow-xl z-50 min-w-[200px]">
+              <button onClick={exportHistoryCSV} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors flex items-center gap-2">
+                <Download size={12} /> Export CSV (.csv)
               </button>
+              <button onClick={exportHistoryPGN} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors flex items-center gap-2">
+                <FileText size={12} /> Export PGN (.pgn)
+              </button>
+              {sessionSummary && (
+                <button onClick={copySessionSummary} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors flex items-center gap-2">
+                  <BarChart3 size={12} /> Copy Session Summary
+                </button>
+              )}
+              <div className="border-t border-white/5 my-1" />
               <button onClick={() => { setFilter('all'); setSearchQuery(''); setShowExportMenu(false); }} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors">
                 Clear all filters
               </button>
@@ -256,6 +359,56 @@ const GameHistory: React.FC = React.memo(() => {
           <button onClick={() => { setCompareA(null); setCompareB(null); }} className="ml-auto text-text-secondary/30 hover:text-accent-red transition-colors">Clear</button>
         </div>
       )}
+
+      {/* Hand comparison diff panel */}
+      {compareA && compareB && (() => {
+        const handA = gameHistory.find(h => h.handNumber === compareA);
+        const handB = gameHistory.find(h => h.handNumber === compareB);
+        if (!handA || !handB) return null;
+        const fields: { label: string; key: keyof typeof handA; format?: (v: any) => string }[] = [
+          { label: 'Winner', key: 'winner' },
+          { label: 'Winning Hand', key: 'winningHand' },
+          { label: 'Pot Size', key: 'potSize', format: (v: number) => `$${v}` },
+          { label: 'Net Result', key: 'botResult', format: (v: number) => `${v >= 0 ? '+' : ''}$${v}` },
+          { label: 'Players', key: 'numPlayers', format: (v: number) => `${v}p` },
+          { label: 'Position', key: 'humanPosition', format: (v: string) => v || '—' },
+          { label: 'Hand Category', key: 'humanHandCategory', format: (v: string) => v || '—' },
+        ];
+        return (
+          <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 animate-fade-in">
+            <div className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1.5">
+              <ArrowUpDown size={12} /> Hand Comparison
+            </div>
+            <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1.5 text-xs">
+              <div /> {/* header spacer */}
+              <div className="font-bold text-gold text-center">#{compareA}</div>
+              <div className="font-bold text-cyan-400 text-center">#{compareB}</div>
+              {fields.map(f => {
+                const va = (handA as any)[f.key] ?? '—';
+                const vb = (handB as any)[f.key] ?? '—';
+                const fa = f.format ? f.format(va) : String(va);
+                const fb = f.format ? f.format(vb) : String(vb);
+                const isDifferent = fa !== fb;
+                return (
+                  <React.Fragment key={f.key}>
+                    <span className="text-text-secondary/40 font-semibold">{f.label}</span>
+                    <span className={`text-center font-mono ${isDifferent ? 'bg-gold/10 rounded px-1' : ''}`}>{fa}</span>
+                    <span className={`text-center font-mono ${isDifferent ? 'bg-cyan-400/10 rounded px-1' : ''}`}>{fb}</span>
+                  </React.Fragment>
+                );
+              })}
+              {/* Win/Loss comparison */}
+              <span className="text-text-secondary/40 font-semibold">Outcome</span>
+              <span className={`text-center font-bold ${handA.botResult > 0 ? 'text-accent-green' : handA.botResult < 0 ? 'text-accent-red' : 'text-text-secondary/50'}`}>
+                {handA.botResult > 0 ? 'WIN' : handA.botResult < 0 ? 'LOSS' : 'EVEN'}
+              </span>
+              <span className={`text-center font-bold ${handB.botResult > 0 ? 'text-accent-green' : handB.botResult < 0 ? 'text-accent-red' : 'text-text-secondary/50'}`}>
+                {handB.botResult > 0 ? 'WIN' : handB.botResult < 0 ? 'LOSS' : 'EVEN'}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* History table */}
       <div className="overflow-x-auto -mx-1">

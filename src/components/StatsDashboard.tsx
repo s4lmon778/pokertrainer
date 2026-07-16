@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
-import { Activity, BarChart3, Brain, User, FlaskConical, History, Download } from 'lucide-react';
+import { Activity, BarChart3, Brain, User, FlaskConical, History, Download, MapPin, TrendingUp, Target } from 'lucide-react';
 import GameHistory from './GameHistory';
 
 const tooltipStyle = {
@@ -314,6 +314,111 @@ const StatsDashboard: React.FC = React.memo(() => {
           <div className="text-center py-6 text-text-secondary text-sm">No decisions recorded yet</div>
         )}
       </div>
+
+      {/* Position Stats */}
+      {Object.keys(stats.positionStats || {}).length > 0 && (
+        <div className="card-premium">
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin size={16} className="text-gold" />
+            <span className="font-bold text-sm">Win Rate by Position</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/5">
+                  <th className="text-left py-2 px-2 text-text-secondary/40 font-semibold">Position</th>
+                  <th className="text-center py-2 px-2 text-text-secondary/40 font-semibold">Hands</th>
+                  <th className="text-center py-2 px-2 text-text-secondary/40 font-semibold">Wins</th>
+                  <th className="text-center py-2 px-2 text-text-secondary/40 font-semibold">Win Rate</th>
+                  <th className="text-right py-2 px-2 text-text-secondary/40 font-semibold">Net Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(stats.positionStats || {})
+                  .sort(([, a], [, b]) => (b.wins / Math.max(1, b.hands)) - (a.wins / Math.max(1, a.hands)))
+                  .map(([pos, data]) => {
+                    const wr = data.hands > 0 ? (data.wins / data.hands) * 100 : 0;
+                    return (
+                      <tr key={pos} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                        <td className="py-2 px-2 font-bold text-text-primary">{pos}</td>
+                        <td className="py-2 px-2 text-center font-mono text-text-secondary/70">{data.hands}</td>
+                        <td className="py-2 px-2 text-center font-mono text-accent-green">{data.wins}</td>
+                        <td className="py-2 px-2 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <div className="w-10 bg-white/10 rounded-full h-1.5 overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${wr}%`, backgroundColor: wr >= 50 ? '#22c55e' : wr >= 35 ? '#d4af37' : '#ef4444' }} />
+                            </div>
+                            <span className={`font-mono font-bold text-[10px] ${wr >= 50 ? 'text-accent-green' : wr >= 35 ? 'text-gold' : 'text-accent-red'}`}>{wr.toFixed(0)}%</span>
+                          </div>
+                        </td>
+                        <td className={`py-2 px-2 text-right font-mono font-bold ${data.netProfit >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                          {data.netProfit >= 0 ? '+' : ''}{data.netProfit}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Hand Strength Stats */}
+      {Object.keys(stats.handStrengthStats || {}).length > 0 && (
+        <div className="card-premium">
+          <div className="flex items-center gap-2 mb-3">
+            <Target size={16} className="text-gold" />
+            <span className="font-bold text-sm">Win Rate by Hand Strength</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {Object.entries(stats.handStrengthStats || {})
+              .sort(([, a], [, b]) => b.hands - a.hands)
+              .map(([cat, data]) => {
+                const wr = data.hands > 0 ? (data.wins / data.hands) * 100 : 0;
+                return (
+                  <div key={cat} className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+                    <div className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-semibold mb-1">{cat}</div>
+                    <div className="flex items-end justify-between">
+                      <span className={`text-lg font-black font-mono ${wr >= 50 ? 'text-accent-green' : wr >= 30 ? 'text-gold' : 'text-accent-red'}`}>
+                        {wr.toFixed(0)}%
+                      </span>
+                      <span className="text-[10px] text-text-secondary/40 font-mono">{data.hands}h</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-1 mt-1.5 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${wr}%`, backgroundColor: wr >= 50 ? '#22c55e' : wr >= 30 ? '#d4af37' : '#ef4444' }} />
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Bluff Success Rate */}
+      {(stats.bluffAttempts || 0) > 0 && (
+        <div className="card-premium">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={16} className="text-gold" />
+            <span className="font-bold text-sm">Bluff Performance</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+              <div className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-semibold mb-1">Attempts</div>
+              <div className="text-xl font-black font-mono text-amber-400">{stats.bluffAttempts || 0}</div>
+            </div>
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+              <div className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-semibold mb-1">Successes</div>
+              <div className="text-xl font-black font-mono text-accent-green">{stats.bluffSuccesses || 0}</div>
+            </div>
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+              <div className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-semibold mb-1">Success Rate</div>
+              <div className={`text-xl font-black font-mono ${((stats.bluffSuccesses || 0) / (stats.bluffAttempts || 1)) >= 0.5 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {((stats.bluffSuccesses || 0) / (stats.bluffAttempts || 1) * 100).toFixed(0)}%
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detailed Stats */}
       <div className="card-premium">

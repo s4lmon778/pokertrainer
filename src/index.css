@@ -45,6 +45,37 @@
     outline: 2px solid #d4af37;
     outline-offset: 3px;
   }
+
+  /* ── High contrast mode support ── */
+  @media (forced-colors: active) {
+    *:focus-visible {
+      outline: 3px solid Highlight;
+      outline-offset: 2px;
+    }
+    .card, .card-premium, .glass {
+      border: 1px solid ButtonText;
+    }
+    button {
+      border: 2px solid ButtonText;
+    }
+    .btn-primary {
+      forced-color-adjust: none;
+      background: Highlight;
+      color: HighlightText;
+    }
+    .poker-chip {
+      forced-color-adjust: none;
+    }
+  }
+
+  /* ── Reduced motion preference ── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @layer components {

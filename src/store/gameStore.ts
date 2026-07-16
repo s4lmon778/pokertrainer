@@ -28,6 +28,9 @@ interface GameHistoryEntry {
   mistakes: number;
   humanAccuracy?: number;
   numPlayers: number;
+  humanPosition?: string;
+  humanHandCategory?: string;
+  humanHandDescription?: string;
 }
 
 interface Stats {
@@ -48,6 +51,13 @@ interface Stats {
   totalFolds: number;
   avgDecisionTime: number;
   accuracyByPhase: Record<GamePhase, { correct: number; total: number }>;
+  /** Per-position stats: key is position name (UTG, MP, CO, BTN, SB, BB) */
+  positionStats: Record<string, { hands: number; wins: number; netProfit: number }>;
+  /** Bluff tracking for training bot */
+  bluffAttempts: number;
+  bluffSuccesses: number;
+  /** Hand strength category tracking */
+  handStrengthStats: Record<string, { hands: number; wins: number }>;
 }
 
 interface TBotStats {
@@ -165,6 +175,10 @@ const DEFAULT_STATS: Stats = {
     river: { correct: 0, total: 0 },
     showdown: { correct: 0, total: 0 },
   },
+  positionStats: {},
+  bluffAttempts: 0,
+  bluffSuccesses: 0,
+  handStrengthStats: {},
 };
 
 export const useGameStore = create<GameStore>()(
@@ -775,18 +789,110 @@ export const useGameStore = create<GameStore>()(
           bankrollHistory: [...prevTbot.bankrollHistory, prevTbot.totalProfit + tbotProfit],
         };
 
+        // Determine human position name
+        const humanIdx = players.findIndex(p => p.id === 'human');
+        const totalPlayers = players.length;
+        const posNames = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'CO', 'BTN'];
+        let humanPositionName = '';
+        if (humanIdx >= 0 && humanIdx < totalPlayers) {
+          const dealerIdx = gameState.dealerPosition;
+          // Position relative to dealer (0 = SB, 1 = BB, 2 = UTG, etc.)
+          let relPos = (humanIdx - dealerIdx + totalPlayers) % totalPlayers;
+          if (totalPlayers <= 3) relPos = humanIdx; // simplified for small tables
+          if (totalPlayers <= 6) {
+            const shortNames = ['SB', 'BB', 'UTG', 'MP', 'CO', 'BTN'];
+            humanPositionName = shortNames[relPos] || posNames[relPos] || `P${relPos}`;
+          } else {
+            humanPositionName = posNames[relPos] || `P${relPos}`;
+          }
+        }
+
+        // Determine human hand strength category
+        let handCategory = 'Unknown';
+        let handDesc = '';
+        if (humanPlayer && humanPlayer.hand.length === 2) {
+          const [c1, c2] = humanPlayer.hand;
+          const v1 = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'].indexOf(c1.rank);
+          const v2 = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'].indexOf(c2.rank);
+          const isPair = v1 === v2;
+          const isSuitedHand = c1.suit === c2.suit;
+          const high = Math.max(v1, v2);
+          const low = Math.min(v1, v2);
+          const gap = high - low;
+          handDesc = `${c1.rank}${c2.rank}${isPair ? '' : isSuitedHand ? 's' : 'o'}`;
+          if (isPair) {
+            if (high >= 11) handCategory = 'High Pair (JJ+)';
+            else if (high >= 8) handCategory = 'Mid Pair (88-TT)';
+            else handCategory = 'Low Pair (22-77)';
+          } else if (high >= 12) {
+            handCategory = 'Broadway / High Cards';
+          } else if (isSuitedHand && gap <= 2) {
+            handCategory = 'Suited Connectors';
+          } else if (isSuitedHand && gap <= 3) {
+            handCategory = 'Suited Gappers';
+          } else if (isSuitedHand) {
+            handCategory = 'Suited';
+          } else if (gap <= 2) {
+            handCategory = 'Connectors';
+          } else {
+            handCategory = 'Other';
+          }
+        }
+
+        // Update position stats
+        const prevPosStats = stats.positionStats || {};
+        const posEntry = prevPosStats[humanPositionName] || { hands: 0, wins: 0, netProfit: 0 };
+        const newPosStats = {
+          ...prevPosStats,
+          [humanPositionName]: {
+            hands: posEntry.hands + 1,
+            wins: posEntry.wins + (isHumanWinner ? 1 : 0),
+            netProfit: posEntry.netProfit + humanNet,
+          },
+        };
+
+        // Update hand strength stats
+        const prevHsStats = stats.handStrengthStats || {};
+        const hsEntry = prevHsStats[handCategory] || { hands: 0, wins: 0 };
+        const newHsStats = {
+          ...prevHsStats,
+          [handCategory]: {
+            hands: hsEntry.hands + 1,
+            wins: hsEntry.wins + (isHumanWinner ? 1 : 0),
+          },
+        };
+
+        // Track bluff from tbotActivity
+        let bluffsThisHand = 0;
+        let bluffSuccessThisHand = 0;
+        const tbotAct = state.tbotActivity;
+        if (tbotAct && tbotAct.isBluff) {
+          bluffsThisHand = 1;
+          if (tbotProfit > 0) bluffSuccessThisHand = 1;
+        }
+
         const historyEntry: GameHistoryEntry = {
           handNumber: gameState.handNumber,
           winner: players.find(p => p.id === winnerId)?.name || winnerId,
           winningHand: gameState.winner?.hand.description || '',
           potSize: gameState.pot, duration: 0,
           startTime: Date.now(), endTime: Date.now(),
-          botResult: humanNet, bluffs: 0, mistakes: 0,
+          botResult: humanNet, bluffs: bluffsThisHand, mistakes: 0,
           numPlayers: gameState.players.length,
+          humanPosition: humanPositionName,
+          humanHandCategory: handCategory,
+          humanHandDescription: handDesc,
         };
 
         set({
-          stats: newStats, tbotStats: newTbotStats,
+          stats: {
+            ...newStats,
+            positionStats: newPosStats,
+            handStrengthStats: newHsStats,
+            bluffAttempts: (stats.bluffAttempts || 0) + bluffsThisHand,
+            bluffSuccesses: (stats.bluffSuccesses || 0) + bluffSuccessThisHand,
+          },
+          tbotStats: newTbotStats,
           gameHistory: [...state.gameHistory, historyEntry],
           currentBankroll: newBankroll,
           gameState: { ...gameState, players },

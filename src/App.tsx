@@ -1,13 +1,26 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import PokerTable from './components/PokerTable';
 import PlayerControls from './components/PlayerControls';
 import RiskOverlay from './components/RiskOverlay';
-import StatsDashboard from './components/StatsDashboard';
 import SettingsPanel from './components/SettingsPanel';
 import Card from './components/Card';
 import CoachTips from './components/CoachTips';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useGameStore } from './store/gameStore';
-import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle } from 'lucide-react';
+import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle, Loader2 } from 'lucide-react';
+
+// Code-split heavy components
+const StatsDashboard = lazy(() => import('./components/StatsDashboard'));
+
+/** Loading fallback for lazy components */
+const LazyFallback: React.FC = () => (
+  <div className="flex items-center justify-center py-20">
+    <div className="flex flex-col items-center gap-3">
+      <Loader2 size={32} className="text-gold animate-spin" />
+      <p className="text-sm text-text-secondary/50">Loading...</p>
+    </div>
+  </div>
+);
 
 type Tab = 'play' | 'stats' | 'rules' | 'about' | 'settings';
 
@@ -206,8 +219,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-surface text-text-primary flex flex-col">
+      {/* Skip navigation link */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[200] focus:px-4 focus:py-2 focus:bg-gold focus:text-black focus:rounded-lg focus:font-bold focus:text-sm">
+        Skip to main content
+      </a>
+
       {/* Header */}
-      <header className="border-b border-white/5 bg-surface/95 backdrop-blur-xl sticky top-0 z-50">
+      <header className="border-b border-white/5 bg-surface/95 backdrop-blur-xl sticky top-0 z-50" role="banner">
         <div className="max-w-[1600px] mx-auto px-2 sm:px-3 py-1.5 sm:py-2">
           <div className="flex items-center justify-between mb-1.5 sm:mb-2.5">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -253,7 +271,7 @@ const App: React.FC = () => {
       </header>
 
       {/* Main */}
-      <main className="flex-1 max-w-[1600px] mx-auto px-2 py-2 w-full" role="main">
+      <main id="main-content" className="flex-1 max-w-[1600px] mx-auto px-2 py-2 w-full" role="main" aria-label="Main content">
         {/* Game Status Bar */}
         {showGame && (
           <div className="glass px-3 sm:px-5 py-2 sm:py-2.5 mb-2 sm:mb-3 flex items-center justify-between flex-wrap gap-2 sm:gap-3 animate-fade-in" role="region" aria-label="Game status" aria-live="polite">
@@ -369,13 +387,38 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'stats' && <section role="region" aria-label="Statistics dashboard"><StatsDashboard /></section>}
+        {activeTab === 'stats' && (
+          <section role="region" aria-label="Statistics dashboard">
+            <ErrorBoundary>
+              <Suspense fallback={<LazyFallback />}>
+                <StatsDashboard />
+              </Suspense>
+            </ErrorBoundary>
+          </section>
+        )}
         {activeTab === 'rules' && <section role="region" aria-label="Poker rules and hand rankings"><RulesPage /></section>}
         {activeTab === 'about' && <section role="region" aria-label="About PokerTrainer"><AboutPage /></section>}
-        {activeTab === 'settings' && <section role="region" aria-label="Game settings"><SettingsPanel /></section>}
+        {activeTab === 'settings' && (
+          <section role="region" aria-label="Game settings">
+            <ErrorBoundary>
+              <SettingsPanel />
+            </ErrorBoundary>
+          </section>
+        )}
       </main>
 
-      <footer className="border-t border-white/5 py-3 text-center">
+      {/* Screen-reader-only live region for game announcements */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {showGame && gameState && (
+          <span>
+            Hand {gameState.handNumber}, {gameState.currentPhase}.
+            {gameState.lastAction && ` Last action: ${gameState.lastAction}.`}
+            {gameState.gameOver && ' Hand complete.'}
+          </span>
+        )}
+      </div>
+
+      <footer className="border-t border-white/5 py-3 text-center" role="contentinfo">
         <p className="text-[10px] text-text-secondary/30 font-medium tracking-wide">POKERTRAINER — EDUCATIONAL SIMULATION. NO REAL MONEY.</p>
       </footer>
 

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
-import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp } from 'lucide-react';
+import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye } from 'lucide-react';
 
 const SettingsPanel: React.FC = React.memo(() => {
   const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
@@ -187,6 +187,53 @@ const SettingsPanel: React.FC = React.memo(() => {
           </div>
         </div>
 
+        {/* Quick Presets (GTO / Exploitative / Mixed) */}
+        <div className="mb-3">
+          <label className="text-xs text-text-secondary mb-1.5 block font-semibold flex items-center gap-1">
+            <Sliders size={12} className="text-cyan-400" /> Quick Presets
+          </label>
+          <div className="flex gap-1.5 flex-wrap">
+            {([
+              {
+                key: 'gto', label: 'GTO', desc: 'Game Theory Optimal',
+                settings: { aggressionFactor: 0.55, bluffFrequency: 0.12, mistakeRate: 0.01, reactionTimeMin: 0.3, reactionTimeMax: 1.5 },
+                color: 'border-blue-400/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400',
+              },
+              {
+                key: 'exploit', label: 'Exploit', desc: 'Exploitative play',
+                settings: { aggressionFactor: 0.80, bluffFrequency: 0.22, mistakeRate: 0.03, reactionTimeMin: 0.5, reactionTimeMax: 2.5 },
+                color: 'border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-400',
+              },
+              {
+                key: 'mixed', label: 'Mixed', desc: 'Balanced hybrid',
+                settings: { aggressionFactor: 0.65, bluffFrequency: 0.15, mistakeRate: 0.02, reactionTimeMin: 0.4, reactionTimeMax: 2.0 },
+                color: 'border-purple-400/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400',
+              },
+              {
+                key: 'nit', label: 'Rock', desc: 'Ultra-tight',
+                settings: { aggressionFactor: 0.30, bluffFrequency: 0.05, mistakeRate: 0.01, reactionTimeMin: 0.8, reactionTimeMax: 4.0 },
+                color: 'border-green-400/40 bg-green-500/10 hover:bg-green-500/20 text-green-400',
+              },
+              {
+                key: 'maniac', label: 'Maniac', desc: 'Wild aggression',
+                settings: { aggressionFactor: 0.95, bluffFrequency: 0.28, mistakeRate: 0.08, reactionTimeMin: 0.2, reactionTimeMax: 1.0 },
+                color: 'border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400',
+              },
+            ] as const).map(p => (
+              <button
+                key={p.key}
+                onClick={() => {
+                  updateTrainingBotSettings(p.settings);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${p.color}`}
+                title={p.desc}
+              >
+                <Eye size={10} /> {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Training Bot Sliders */}
         <div className="space-y-3">
           <SliderControl
@@ -223,6 +270,26 @@ const SettingsPanel: React.FC = React.memo(() => {
                 onChange={e => handleTrainingChange('reactionTimeMax', parseFloat(e.target.value) || 3)}
                 className="input-field text-sm" />
             </div>
+          </div>
+        </div>
+
+        {/* Behavior Preview */}
+        <div className="mt-3 pt-3 border-t border-white/5">
+          <label className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-bold block mb-1.5 flex items-center gap-1">
+            <Eye size={10} /> Behavior Preview
+          </label>
+          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+            {[
+              { label: 'Style', value: trainingBotSettings.aggressionFactor > 0.7 ? 'Aggressive' : trainingBotSettings.aggressionFactor < 0.4 ? 'Passive' : 'Balanced', color: trainingBotSettings.aggressionFactor > 0.7 ? 'text-red-400' : trainingBotSettings.aggressionFactor < 0.4 ? 'text-blue-400' : 'text-cyan-400' },
+              { label: 'Bluffing', value: trainingBotSettings.bluffFrequency > 0.18 ? 'Frequent' : trainingBotSettings.bluffFrequency > 0.08 ? 'Moderate' : 'Rare', color: trainingBotSettings.bluffFrequency > 0.18 ? 'text-amber-400' : trainingBotSettings.bluffFrequency > 0.08 ? 'text-gold' : 'text-green-400' },
+              { label: 'Accuracy', value: trainingBotSettings.mistakeRate > 0.05 ? 'Low' : trainingBotSettings.mistakeRate > 0.02 ? 'Medium' : 'High', color: trainingBotSettings.mistakeRate < 0.03 ? 'text-green-400' : trainingBotSettings.mistakeRate < 0.06 ? 'text-gold' : 'text-red-400' },
+              { label: 'Speed', value: (trainingBotSettings.reactionTimeMin + trainingBotSettings.reactionTimeMax) / 2 < 1.5 ? 'Fast' : (trainingBotSettings.reactionTimeMin + trainingBotSettings.reactionTimeMax) / 2 < 3 ? 'Normal' : 'Slow', color: (trainingBotSettings.reactionTimeMin + trainingBotSettings.reactionTimeMax) / 2 < 1.5 ? 'text-cyan-400' : 'text-text-secondary/60' },
+            ].map(row => (
+              <div key={row.label} className="flex items-center justify-between bg-white/[0.02] rounded-lg px-2 py-1.5 border border-white/5">
+                <span className="text-text-secondary/50">{row.label}</span>
+                <span className={`font-bold ${row.color}`}>{row.value}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -282,6 +349,21 @@ const SettingsPanel: React.FC = React.memo(() => {
 
       {/* ===== TRAINING BOT ADVANCED CONFIG (STUBBED) ===== */}
       <AdvancedBotConfig />
+
+      {/* Export / Import Settings */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-2">
+          <Sliders size={16} className="text-gold" />
+          <span className="font-bold text-sm">Export / Import Settings</span>
+        </div>
+        <p className="text-xs text-text-secondary mb-3">
+          Save your current training bot configuration as a JSON file, or load a previously saved configuration. Settings persist across sessions via localStorage.
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          <ExportSettingsButton />
+          <ImportSettingsButton />
+        </div>
+      </div>
 
       {/* Reset */}
       <button onClick={resetStats}
@@ -441,5 +523,121 @@ const AdvancedBotConfig: React.FC = React.memo(() => {
 });
 
 AdvancedBotConfig.displayName = 'AdvancedBotConfig';
+
+// ── Export / Import Buttons ──
+
+const ExportSettingsButton: React.FC = React.memo(() => {
+  const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
+  const botSettings = useGameStore(s => s.botSettings);
+  const opponentPersonality = useGameStore(s => s.opponentPersonality);
+  const tableSize = useGameStore(s => s.tableSize);
+  const buyIn = useGameStore(s => s.buyIn);
+  const startingBankroll = useGameStore(s => s.startingBankroll);
+  const autoPlaySpeed = useGameStore(s => s.autoPlaySpeed);
+
+  const handleExport = useCallback(() => {
+    const config = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      trainingBotSettings,
+      opponentSettings: botSettings,
+      opponentPersonality,
+      tableConfig: { tableSize, buyIn, startingBankroll, autoPlaySpeed },
+    };
+    const json = JSON.stringify(config, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pokertrainer-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [trainingBotSettings, botSettings, opponentPersonality, tableSize, buyIn, startingBankroll, autoPlaySpeed]);
+
+  return (
+    <button onClick={handleExport} className="btn-secondary flex items-center gap-1.5 text-xs">
+      <Download size={14} /> Export Config
+    </button>
+  );
+});
+ExportSettingsButton.displayName = 'ExportSettingsButton';
+
+const ImportSettingsButton: React.FC = React.memo(() => {
+  const updateTrainingBotSettings = useGameStore(s => s.updateTrainingBotSettings);
+  const updateBotSettings = useGameStore(s => s.updateBotSettings);
+  const setOpponentPersonality = useGameStore(s => s.setOpponentPersonality);
+  const setTableSize = useGameStore(s => s.setTableSize);
+  const setBuyIn = useGameStore(s => s.setBuyIn);
+  const setStartingBankroll = useGameStore(s => s.setStartingBankroll);
+  const setAutoPlaySpeed = useGameStore(s => s.setAutoPlaySpeed);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const handleImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const config = JSON.parse(evt.target?.result as string);
+        if (!config.version || !config.trainingBotSettings) {
+          throw new Error('Invalid config file format');
+        }
+        if (config.trainingBotSettings) {
+          updateTrainingBotSettings(config.trainingBotSettings);
+        }
+        if (config.opponentSettings) {
+          updateBotSettings(config.opponentSettings);
+        }
+        if (config.opponentPersonality) {
+          setOpponentPersonality(config.opponentPersonality);
+        }
+        if (config.tableConfig) {
+          const tc = config.tableConfig;
+          if (tc.tableSize) setTableSize(tc.tableSize);
+          if (tc.buyIn) setBuyIn(tc.buyIn);
+          if (tc.startingBankroll) setStartingBankroll(tc.startingBankroll);
+          if (tc.autoPlaySpeed) setAutoPlaySpeed(tc.autoPlaySpeed);
+        }
+        setImportStatus('success');
+        setStatusMsg('Settings imported successfully!');
+        setTimeout(() => setImportStatus('idle'), 3000);
+      } catch (err) {
+        setImportStatus('error');
+        setStatusMsg('Failed to import: invalid file format');
+        setTimeout(() => setImportStatus('idle'), 3000);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input for re-import of same file
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [updateTrainingBotSettings, updateBotSettings, setOpponentPersonality, setTableSize, setBuyIn, setStartingBankroll, setAutoPlaySpeed]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        onChange={handleImport}
+        className="hidden"
+        id="import-settings-input"
+        aria-label="Import settings from JSON file"
+      />
+      <label htmlFor="import-settings-input" className="btn-secondary flex items-center gap-1.5 text-xs cursor-pointer">
+        <Upload size={14} /> Import Config
+      </label>
+      {importStatus !== 'idle' && (
+        <span className={`text-[10px] font-semibold ${importStatus === 'success' ? 'text-green-400' : 'text-red-400'} animate-fade-in`}>
+          {statusMsg}
+        </span>
+      )}
+    </div>
+  );
+});
+ImportSettingsButton.displayName = 'ImportSettingsButton';
 
 export default SettingsPanel;
