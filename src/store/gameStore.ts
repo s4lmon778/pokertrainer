@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GameState, Player, GamePhase, Card as CardType } from '../types/card';
+import type { GameState, Player, GamePhase, Card as CardType, SidePot } from '../types/card';
 import { createDeck, shuffleDeck } from '../utils/deck';
 import { evaluateHand } from '../utils/handEvaluator';
 import { botDecision, type BotSettings, createBotSettings, createOpponentSettings, type BotPersonality } from '../utils/botEngine';
@@ -81,13 +81,14 @@ interface GameStore {
   showTableTalk: boolean;
   showCardsAtEnd: boolean;
   autoPlayMode: boolean;
-  tbotActivity: { action: string; amount?: number; confidence: number; reasoning: string; isBluff: boolean; timestamp: number } | null;
+  tbotActivity: { action: string; amount?: number; confidence: number; reasoning: string; isBluff: boolean; isAllIn?: boolean; timestamp: number } | null;
   botEvaluations: BotEvaluationEntry[];
   autoPlaySpeed: number;
 
   initializeGame: () => void;
   startHand: () => void;
   dealCommunityCards: (phase: GamePhase) => void;
+  autoDealRemainingCards: () => void;
   botAct: () => Promise<void>;
   playerAct: (action: 'fold' | 'check' | 'call' | 'raise', amount?: number) => void;
   advancePhase: () => void;
@@ -109,27 +110,44 @@ interface GameStore {
   resetStats: () => void;
   nextHand: () => void;
   quitGame: () => void;
+  addHumanChips: (amount: number) => void;
   setAutoPlaySpeed: (speed: number) => void;
   recordHumanDecision: (decision: Omit<BotEvaluationEntry, 'handNumber'>) => void;
 }
 
+// Helper: build a new player object
+function makePlayer(
+  id: string, name: string, position: number, chips: number,
+  isBot: boolean, isTrainingBot?: boolean,
+): Player {
+  return {
+    id, name, chips, position, isBot, isTrainingBot,
+    hand: [], bet: 0, folded: false,
+    totalBetThisRound: 0, totalHandBet: 0,
+    isAllIn: false, actedThisRound: false,
+  };
+}
+
+// Helper: reset player state for new hand
+function resetForNewHand(p: Player): Player {
+  return {
+    ...p,
+    hand: [],
+    bet: 0,
+    folded: false,
+    totalBetThisRound: 0,
+    totalHandBet: 0,
+    isAllIn: false,
+    actedThisRound: false,
+  };
+}
+
 const DEFAULT_STATS: Stats = {
-  totalHands: 0,
-  totalWon: 0,
-  totalLost: 0,
-  biggestWin: 0,
-  biggestLoss: 0,
-  avgPotSize: 0,
-  botSessions: 0,
-  botWins: 0,
-  botLosses: 0,
-  winRate: 0,
-  roi: 0,
-  bankrollHistory: [],
-  totalBets: 0,
-  totalCalls: 0,
-  totalFolds: 0,
-  avgDecisionTime: 0,
+  totalHands: 0, totalWon: 0, totalLost: 0,
+  biggestWin: 0, biggestLoss: 0, avgPotSize: 0,
+  botSessions: 0, botWins: 0, botLosses: 0,
+  winRate: 0, roi: 0, bankrollHistory: [],
+  totalBets: 0, totalCalls: 0, totalFolds: 0, avgDecisionTime: 0,
   accuracyByPhase: {
     preflop: { correct: 0, total: 0 },
     flop: { correct: 0, total: 0 },
@@ -166,163 +184,113 @@ export const useGameStore = create<GameStore>()(
       botEvaluations: [],
       autoPlaySpeed: 400,
 
+      // ── Initialize game ──
       initializeGame: () => {
         const { tableSize, buyIn, blinds } = get();
         const players: Player[] = [];
-
-        // Human player at position 0
-        players.push({
-          id: 'human',
-          name: 'You',
-          chips: buyIn,
-          hand: [],
-          bet: 0,
-          folded: false,
-          isBot: false,
-          position: 0,
-          totalBetThisRound: 0,
-          actedThisRound: false,
-        });
-
-        // Training bot at position 1 (the bot to train/test)
-        players.push({
-          id: 'training-bot',
-          name: 'T-Bot',
-          chips: buyIn,
-          hand: [],
-          bet: 0,
-          folded: false,
-          isBot: true,
-          isTrainingBot: true,
-          position: 1,
-          totalBetThisRound: 0,
-          actedThisRound: false,
-        });
-
-        // Regular opponent bots fill remaining positions
+        players.push(makePlayer('human', 'You', 0, buyIn, false));
+        players.push(makePlayer('training-bot', 'T-Bot', 1, buyIn, true, true));
         const opponentNames = ['Vortex', 'Phantom', 'Shadow', 'Ace', 'Titan', 'Nova', 'Blitz'];
         for (let i = 2; i < tableSize; i++) {
-          players.push({
-            id: `bot-${i}`,
-            name: opponentNames[(i - 2) % opponentNames.length],
-            chips: buyIn,
-            hand: [],
-            bet: 0,
-            folded: false,
-            isBot: true,
-            isTrainingBot: false,
-            position: i,
-            totalBetThisRound: 0,
-            actedThisRound: false,
-          });
+          players.push(makePlayer(`bot-${i}`, opponentNames[(i - 2) % opponentNames.length], i, buyIn, true));
         }
-
         set({
           gameState: {
-            players,
-            communityCards: [],
-            pot: 0,
-            sidePots: [],
-            currentPhase: 'preflop',
-            dealerPosition: 0,
-            currentPlayerIndex: 0,
-            currentBet: blinds.big,
-            minRaise: blinds.big,
-            handNumber: 0,
-            deck: [],
-            gameOver: false,
-            sbPosition: 1,
-            bbPosition: 2,
+            players, communityCards: [], pot: 0, sidePots: [],
+            currentPhase: 'preflop', dealerPosition: 0,
+            currentPlayerIndex: 0, currentBet: blinds.big,
+            minRaise: blinds.big, lastRaiseAmount: blinds.big,
+            handNumber: 0, deck: [], gameOver: false,
+            sbPosition: 1, bbPosition: 2, preflopRaised: false,
           },
-          isPlaying: true,
-          gamePhase: 'preflop',
+          isPlaying: true, gamePhase: 'preflop',
         });
       },
 
+      // ── Start hand ──
       startHand: () => {
         const state = get();
         if (!state.gameState) return;
-
-        // Fresh shuffled deck — use timestamp to ensure different RNG path
-        const freshDeck = createDeck();
-        const deck = shuffleDeck(freshDeck);
+        const deck = shuffleDeck(createDeck());
         const { blinds, gameState } = state;
 
-        const players: Player[] = gameState.players.map(p => ({
-          ...p,
-          hand: [] as CardType[],
-          bet: 0,
-          folded: false,
-          totalBetThisRound: 0,
-          actedThisRound: false,
-          chips: p.chips,
-        }));
+        const players: Player[] = gameState.players.map(resetForNewHand);
 
-        const sbIdx = (gameState.dealerPosition + 1) % players.length;
-        const bbIdx = (gameState.dealerPosition + 2) % players.length;
+        // Helper: find next player with chips > 0, starting from startIdx, wrapping
+        const nextWithChips = (arr: Player[], startIdx: number): number => {
+          for (let i = 0; i < arr.length; i++) {
+            const idx = (startIdx + i) % arr.length;
+            if (arr[idx].chips > 0) return idx;
+          }
+          return startIdx % arr.length; // fallback
+        };
 
-        // Post blinds
-        if (players[sbIdx].chips >= blinds.small) {
-          players[sbIdx].chips -= blinds.small;
-          players[sbIdx].bet = blinds.small;
-          players[sbIdx].totalBetThisRound = blinds.small;
-        } else {
-          players[sbIdx].bet = Math.max(0, players[sbIdx].chips);
-          players[sbIdx].chips = 0;
-          players[sbIdx].totalBetThisRound = players[sbIdx].bet;
+        // Find dealer, SB, BB skipping busted players
+        const newDealer = nextWithChips(players, gameState.dealerPosition + 1);
+        const sbIdx = nextWithChips(players, newDealer + 1);
+        const bbIdx = nextWithChips(players, sbIdx + 1);
+
+        // If heads-up (only 2 with chips), dealer = SB
+        const activeCount = players.filter(p => p.chips > 0).length;
+        const effectiveDealer = activeCount === 2 ? sbIdx : newDealer;
+
+        // Post SB
+        const sbAmount = Math.min(blinds.small, players[sbIdx].chips);
+        players[sbIdx].chips -= sbAmount;
+        players[sbIdx].bet = sbAmount;
+        players[sbIdx].totalBetThisRound = sbAmount;
+        players[sbIdx].totalHandBet = sbAmount;
+        if (players[sbIdx].chips === 0) players[sbIdx].isAllIn = true;
+
+        // Post BB
+        const bbAmount = Math.min(blinds.big, players[bbIdx].chips);
+        players[bbIdx].chips -= bbAmount;
+        players[bbIdx].bet = bbAmount;
+        players[bbIdx].totalBetThisRound = bbAmount;
+        players[bbIdx].totalHandBet = bbAmount;
+        if (players[bbIdx].chips === 0) players[bbIdx].isAllIn = true;
+
+        // Deal hole cards
+        const nonBusted = players.filter(p => p.chips > 0 || p.bet > 0);
+        for (const p of nonBusted) {
+          const c1 = deck.pop(); if (c1) p.hand.push(c1);
+          const c2 = deck.pop(); if (c2) p.hand.push(c2);
         }
-        if (players[bbIdx].chips >= blinds.big) {
-          players[bbIdx].chips -= blinds.big;
-          players[bbIdx].bet = blinds.big;
-          players[bbIdx].totalBetThisRound = blinds.big;
-        } else {
-          players[bbIdx].bet = Math.max(0, players[bbIdx].chips);
-          players[bbIdx].chips = 0;
-          players[bbIdx].totalBetThisRound = players[bbIdx].bet;
-        }
 
-        // Deal 2 cards to each non-busted player
-        for (let i = 0; i < players.length; i++) {
-          if (players[i].chips <= 0 && players[i].bet === 0) continue;
-          const c1 = deck.pop();
-          const c2 = deck.pop();
-          if (c1) players[i].hand.push(c1);
-          if (c2) players[i].hand.push(c2);
-        }
+        const newSb = sbIdx;
+        const newBb = bbIdx;
 
-        const totalPot = players[sbIdx].bet + players[bbIdx].bet;
-        // Rotate dealer each hand
-        const newDealer = (gameState.dealerPosition + 1) % players.length;
+        // First-to-act after BB
+        const utg = nextWithChips(players, bbIdx + 1);
 
         set({
           gameState: {
             ...gameState,
-            players,
-            communityCards: [],
-            pot: totalPot,
-            currentPhase: 'preflop',
-            dealerPosition: newDealer,
-            currentPlayerIndex: (bbIdx + 1) % players.length,
-            currentBet: blinds.big,
-            minRaise: blinds.big,
+            players, communityCards: [],
+            pot: sbAmount + bbAmount, sidePots: [],
+            currentPhase: 'preflop', dealerPosition: effectiveDealer,
+            currentPlayerIndex: utg,
+            currentBet: Math.max(sbAmount, bbAmount),
+            minRaise: blinds.big, lastRaiseAmount: blinds.big,
             handNumber: gameState.handNumber + 1,
-            deck,
-            gameOver: false,
-            sbPosition: (newDealer + 1) % players.length,
-            bbPosition: (newDealer + 2) % players.length,
+            deck, gameOver: false,
+            sbPosition: newSb, bbPosition: newBb,
+            preflopRaised: false,
           },
-          gamePhase: 'preflop',
-          isDealing: true,
-          isPlaying: true,
+          gamePhase: 'preflop', isDealing: true, isPlaying: true,
         });
-
         setTimeout(() => set({ isDealing: false }), 600);
       },
 
+      // ── Deal community cards ──
       dealCommunityCards: (phase: GamePhase) => {
         const state = get();
         if (!state.gameState) return;
         const { deck, communityCards } = state.gameState;
+
+        // Burn one card before dealing
+        deck.pop();
+
         const cardsToDeal = phase === 'flop' ? 3 : 1;
         const newCommunity = [...communityCards];
         for (let i = 0; i < cardsToDeal; i++) {
@@ -330,6 +298,7 @@ export const useGameStore = create<GameStore>()(
           if (card) newCommunity.push(card);
         }
 
+        // Reset per-round state; all-in players (chips===0) keep bet/actedThisRound
         const players = state.gameState.players.map(p => ({
           ...p,
           bet: p.chips === 0 ? p.bet : 0,
@@ -337,71 +306,99 @@ export const useGameStore = create<GameStore>()(
           actedThisRound: p.chips === 0 ? true : false,
         }));
 
+        // After flop, first to act is first active player left of dealer
+        let firstToAct = (state.gameState.dealerPosition + 1) % players.length;
+        for (let i = 0; i < players.length; i++) {
+          const idx = (state.gameState.dealerPosition + 1 + i) % players.length;
+          if (players[idx].chips > 0 && !players[idx].folded) { firstToAct = idx; break; }
+        }
+
         set({
           gameState: {
             ...state.gameState,
-            players,
-            communityCards: newCommunity,
+            players, communityCards: newCommunity,
             currentPhase: phase,
-            currentPlayerIndex: (state.gameState.dealerPosition + 1) % state.gameState.players.length,
+            currentPlayerIndex: firstToAct,
             currentBet: 0,
             minRaise: state.blinds.big,
+            lastRaiseAmount: 0,
             lastAction: `${phase.charAt(0).toUpperCase() + phase.slice(1)} dealt`,
           },
           gamePhase: phase,
         });
       },
 
+      // ── Auto-deal remaining community cards (all-in, no more betting) ──
+      autoDealRemainingCards: () => {
+        const state = get();
+        if (!state.gameState || state.gameState.gameOver) return;
+        const phases: GamePhase[] = ['preflop', 'flop', 'turn', 'river'];
+        const currentIdx = phases.indexOf(state.gameState.currentPhase);
+        for (let i = currentIdx + 1; i < phases.length; i++) {
+          get().dealCommunityCards(phases[i]);
+        }
+      },
+
+      // ── Bot act ──
       botAct: async () => {
         const state = get();
         if (!state.gameState) return;
-
-        const player = state.gameState.players[state.gameState.currentPlayerIndex];
+        const gs = state.gameState;
+        const pIdx = gs.currentPlayerIndex;
+        const player = gs.players[pIdx];
         if (!player) return;
-        // Allow human in autoPlayMode, otherwise only bots
         if (!player.isBot && !state.autoPlayMode) return;
         if (player.folded || player.chips <= 0) return;
 
-        // In auto mode, human uses training bot settings
         const isAutoHuman = !player.isBot && state.autoPlayMode;
         const settings = (player.isTrainingBot || isAutoHuman) ? state.trainingBotSettings : state.botSettings;
-        const decision = botDecision(state.gameState, player, settings);
+        const decision = botDecision(gs, player, settings);
 
-        const players = state.gameState.players.map(p => ({ ...p }));
-        const pIdx = state.gameState.currentPlayerIndex;
-        const currentPlayer = { ...players[pIdx] };
+        const players = gs.players.map(p => ({ ...p }));
+        const cur = { ...players[pIdx] };
         let wasRaise = false;
+        let isAllIn = false;
+        const prevBet = cur.bet;
 
         switch (decision.action) {
           case 'fold':
-            currentPlayer.folded = true;
+            cur.folded = true;
             break;
           case 'check':
             break;
           case 'call': {
-            const callAmount = Math.min(state.gameState.currentBet - currentPlayer.bet, currentPlayer.chips);
-            if (callAmount <= 0) break;
-            currentPlayer.chips -= callAmount;
-            currentPlayer.bet += callAmount;
-            currentPlayer.totalBetThisRound += callAmount;
+            const callAmt = Math.min(gs.currentBet - cur.bet, cur.chips);
+            if (callAmt > 0) {
+              cur.chips -= callAmt;
+              cur.bet += callAmt;
+              cur.totalBetThisRound += callAmt;
+              cur.totalHandBet += callAmt;
+              if (cur.chips === 0) isAllIn = true;
+            }
             break;
           }
           case 'raise': {
-            const raiseTotal = decision.amount || state.gameState.currentBet * 2;
-            const toAdd = Math.min(raiseTotal - currentPlayer.bet, currentPlayer.chips);
-            if (toAdd <= 0) break;
-            currentPlayer.chips -= toAdd;
-            currentPlayer.bet += toAdd;
-            currentPlayer.totalBetThisRound += toAdd;
-            wasRaise = true;
+            // Enforce minimum raise
+            const minTotal = gs.currentBet + Math.max(gs.minRaise, gs.lastRaiseAmount || gs.minRaise);
+            const raiseTotal = Math.max(decision.amount || minTotal, minTotal);
+            const toAdd = Math.min(raiseTotal - cur.bet, cur.chips);
+            if (toAdd > 0) {
+              cur.chips -= toAdd;
+              cur.bet += toAdd;
+              cur.totalBetThisRound += toAdd;
+              cur.totalHandBet += toAdd;
+              wasRaise = true;
+              if (cur.chips === 0) isAllIn = true;
+            }
             break;
           }
         }
 
-        currentPlayer.actedThisRound = true;
-        players[pIdx] = currentPlayer;
+        cur.actedThisRound = true;
+        if (isAllIn) cur.isAllIn = true;
+        players[pIdx] = cur;
 
-        // If bot raised, reset other active players so they can respond
+        // Reset actedThisRound for others when raising (they must respond)
         if (wasRaise) {
           for (let i = 0; i < players.length; i++) {
             if (i !== pIdx && !players[i].folded && players[i].chips > 0) {
@@ -410,43 +407,49 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        const oldTotalBet = state.gameState.players[pIdx].totalBetThisRound;
-        const potIncrease = Math.max(0, currentPlayer.totalBetThisRound - oldTotalBet);
-        const newPot = state.gameState.pot + potIncrease;
+        // Action label
+        let actionLabel: string;
+        if (decision.action === 'fold') actionLabel = 'folds';
+        else if (decision.action === 'check') actionLabel = 'checks';
+        else if (isAllIn) actionLabel = `all-in for $${cur.bet}`;
+        else if (wasRaise) actionLabel = `raises to $${cur.bet}`;
+        else if (decision.action === 'call') actionLabel = cur.bet > prevBet ? `calls $${cur.bet - prevBet}` : 'checks';
+        else actionLabel = decision.action;
+        if (decision.isBluff) actionLabel += ' (bluff!)';
 
-        // Track T-Bot activity for UI display
-        const isTraining = player.isTrainingBot || (!player.isBot && state.autoPlayMode);
+        const newPot = gs.pot + Math.max(0, cur.totalBetThisRound - (gs.players[pIdx].totalBetThisRound));
+        const isTraining = player.isTrainingBot || isAutoHuman;
         const tbotUpdate = isTraining ? {
           tbotActivity: {
-            action: decision.action,
-            amount: decision.amount,
-            confidence: decision.confidence,
-            reasoning: decision.reasoning,
-            isBluff: decision.isBluff,
-            timestamp: Date.now(),
+            action: decision.action, amount: decision.amount,
+            confidence: decision.confidence, reasoning: decision.reasoning,
+            isBluff: decision.isBluff, isAllIn, timestamp: Date.now(),
           } as GameStore['tbotActivity'],
         } : {};
 
         set({
           gameState: {
-            ...state.gameState,
-            players,
-            pot: newPot,
-            currentBet: decision.action === 'raise' ? currentPlayer.bet : state.gameState.currentBet,
-            lastAction: `${currentPlayer.name} ${decision.action}${decision.action === 'raise' ? ` to $${currentPlayer.bet}` : ''}${decision.isBluff ? ' (bluff!)' : ''}`,
+            ...gs, players, pot: newPot,
+            currentBet: wasRaise ? cur.bet : gs.currentBet,
+            minRaise: wasRaise ? Math.max(gs.minRaise, cur.bet - gs.currentBet) : gs.minRaise,
+            lastRaiseAmount: wasRaise ? (cur.bet - gs.currentBet) : gs.lastRaiseAmount,
+            preflopRaised: gs.preflopRaised || (wasRaise && gs.currentPhase === 'preflop'),
+            lastAction: `${cur.name} ${actionLabel}`,
           },
           ...tbotUpdate,
         });
       },
 
+      // ── Player act ──
       playerAct: (action, amount) => {
         const state = get();
         if (!state.gameState) return;
-        const players = state.gameState.players.map(p => ({ ...p }));
-        const humanIdx = players.findIndex(p => !p.isBot);
-        if (humanIdx === -1) return;
-        const human = { ...players[humanIdx] };
         const gs = state.gameState;
+        const players = gs.players.map(p => ({ ...p }));
+        const hIdx = players.findIndex(p => !p.isBot);
+        if (hIdx === -1) return;
+        const human = { ...players[hIdx] };
+        const prevBet = human.bet;
         let raised = false;
 
         switch (action) {
@@ -455,7 +458,7 @@ export const useGameStore = create<GameStore>()(
             break;
           case 'check':
             human.actedThisRound = true;
-            players[humanIdx] = human;
+            players[hIdx] = human;
             set({ gameState: { ...gs, players, lastAction: 'You check' } });
             get().advanceTurn();
             return;
@@ -463,7 +466,7 @@ export const useGameStore = create<GameStore>()(
             const callAmt = Math.min(gs.currentBet - human.bet, human.chips);
             if (callAmt <= 0) {
               human.actedThisRound = true;
-              players[humanIdx] = human;
+              players[hIdx] = human;
               set({ gameState: { ...gs, players, lastAction: 'You check' } });
               get().advanceTurn();
               return;
@@ -471,14 +474,17 @@ export const useGameStore = create<GameStore>()(
             human.chips -= callAmt;
             human.bet += callAmt;
             human.totalBetThisRound += callAmt;
+            human.totalHandBet += callAmt;
+            if (human.chips === 0) human.isAllIn = true;
             break;
           }
           case 'raise': {
-            const raiseTotal = amount || Math.min(gs.currentBet * 2, gs.currentBet + human.chips);
+            const minTotal = gs.currentBet + Math.max(gs.minRaise, gs.lastRaiseAmount || gs.minRaise);
+            const raiseTotal = Math.max(amount || minTotal, minTotal);
             const toAdd = Math.min(raiseTotal - human.bet, human.chips);
             if (toAdd <= 0) {
               human.actedThisRound = true;
-              players[humanIdx] = human;
+              players[hIdx] = human;
               set({ gameState: { ...gs, players, lastAction: 'You check' } });
               get().advanceTurn();
               return;
@@ -486,91 +492,137 @@ export const useGameStore = create<GameStore>()(
             human.chips -= toAdd;
             human.bet += toAdd;
             human.totalBetThisRound += toAdd;
+            human.totalHandBet += toAdd;
             raised = true;
+            if (human.chips === 0) human.isAllIn = true;
             break;
           }
         }
 
         human.actedThisRound = true;
-        players[humanIdx] = human;
-
-        const oldTotalBet = gs.players[humanIdx].totalBetThisRound;
-        const potIncrease = human.totalBetThisRound - oldTotalBet;
-        const newPot = gs.pot + Math.max(0, potIncrease);
+        players[hIdx] = human;
 
         if (raised) {
           for (let i = 0; i < players.length; i++) {
-            if (i !== humanIdx && !players[i].folded && players[i].chips > 0) {
+            if (i !== hIdx && !players[i].folded && players[i].chips > 0) {
               players[i].actedThisRound = false;
             }
           }
         }
 
+        const newPot = gs.pot + Math.max(0, human.totalBetThisRound - (gs.players[hIdx].totalBetThisRound));
+        const lastAction = raised
+          ? `You raise to $${human.bet}`
+          : action === 'fold' ? 'You fold'
+          : `You call $${human.bet - prevBet}`;
+
         set({
           gameState: {
-            ...gs,
-            players,
-            pot: newPot,
-            currentBet: action === 'raise' ? human.bet : gs.currentBet,
-            lastAction: `You ${action}${action === 'raise' && amount ? ` to $${amount}` : ''}`,
+            ...gs, players, pot: newPot,
+            currentBet: raised ? human.bet : gs.currentBet,
+            minRaise: raised ? Math.max(gs.minRaise, human.bet - gs.currentBet) : gs.minRaise,
+            lastRaiseAmount: raised ? (human.bet - gs.currentBet) : gs.lastRaiseAmount,
+            preflopRaised: gs.preflopRaised || (raised && gs.currentPhase === 'preflop'),
+            lastAction,
           },
         });
 
-        // Track human decision vs bot recommendation
+        // Track decision vs bot recommendation
         if (human.hand.length > 0 && gs.communityCards.length > 0) {
           const handStrength = evaluateHand(human.hand, gs.communityCards).score;
           const botRec = botDecision(gs, human, state.botSettings);
-          const actionLower = action.toLowerCase();
-          const recLower = botRec.action.toLowerCase();
-          const isCorrect = actionLower === recLower || (actionLower === 'check' && recLower === 'call' && gs.currentBet === human.bet);
+          const aL = action.toLowerCase();
+          const rL = botRec.action.toLowerCase();
+          const isCorrect = aL === rL || (aL === 'check' && rL === 'call' && gs.currentBet === human.bet);
           get().recordHumanDecision({
-            phase: gs.currentPhase,
-            player: 'You',
-            action: actionLower,
-            actualHandStrength: handStrength,
-            recommendedAction: recLower,
-            isCorrect,
-            reasoning: isCorrect ? 'Matches bot recommendation' : `Bot recommended ${recLower}`,
+            phase: gs.currentPhase, player: 'You', action: aL,
+            actualHandStrength: handStrength, recommendedAction: rL,
+            isCorrect, reasoning: isCorrect ? 'Matches bot recommendation' : `Bot recommended ${rL}`,
           });
         }
 
         get().advanceTurn();
       },
 
+      // ── Advance turn ──
       advanceTurn: () => {
         const state = get();
         if (!state.gameState || state.gameState.gameOver) return;
-
         const gs = state.gameState;
         const players = gs.players;
 
-        const nonFoldedWithChips = players.filter(p => !p.folded && p.chips > 0);
-        if (nonFoldedWithChips.length <= 1) {
+        // Players who can still act (not folded, still have chips)
+        const canAct = players.filter(p => !p.folded && p.chips > 0);
+
+        // No one can act → determine what to do
+        if (canAct.length === 0) {
+          // If only one non-folded player: they win immediately (everyone else folded)
+          const nonFolded = players.filter(p => !p.folded);
+          if (nonFolded.length <= 1) {
+            get().resolveHand();
+            return;
+          }
+          // Multiple non-folded but all all-in → deal remaining cards, then showdown
+          get().autoDealRemainingCards();
           get().resolveHand();
           return;
         }
 
-        const allActed = players
-          .filter(p => !p.folded && p.chips > 0)
-          .every(p => p.actedThisRound);
+        // Only one player can act → check if we need to auto-deal
+        if (canAct.length === 1) {
+          // Check if everyone has acted with equal bets
+          const allActed = canAct.every(p => p.actedThisRound);
+          if (allActed) {
+            const bets = canAct.map(p => p.totalBetThisRound);
+            const allEqual = bets.every(b => b === bets[0]);
+            // Also check if there are all-in players who haven't been handled
+            const hasAllInPlayers = players.some(p => !p.folded && p.chips === 0);
+            if (allEqual && hasAllInPlayers) {
+              // No more betting possible — deal remaining cards
+              get().autoDealRemainingCards();
+              get().resolveHand();
+              return;
+            }
+            if (allEqual) {
+              get().advancePhase();
+              return;
+            }
+          }
+          // Still need the one player to act — find next
+          let nextIdx = (gs.currentPlayerIndex + 1) % players.length;
+          let iterations = 0;
+          while (iterations < players.length) {
+            const c = players[nextIdx];
+            if (!c.folded && c.chips > 0 && !c.actedThisRound) {
+              set({ gameState: { ...gs, currentPlayerIndex: nextIdx } });
+              return;
+            }
+            nextIdx = (nextIdx + 1) % players.length;
+            iterations++;
+          }
+          // All have acted, advance phase
+          get().advancePhase();
+          return;
+        }
 
+        // Normal flow: 2+ players can act
+        // Check if all have acted with equal bets
+        const allActed = canAct.every(p => p.actedThisRound);
         if (allActed) {
-          const bets = players
-            .filter(p => !p.folded && p.chips > 0)
-            .map(p => p.totalBetThisRound);
+          const bets = canAct.map(p => p.totalBetThisRound);
           const allEqual = bets.every(b => b === bets[0]);
-
           if (allEqual) {
             get().advancePhase();
             return;
           }
         }
 
+        // Find next player to act
         let nextIdx = (gs.currentPlayerIndex + 1) % players.length;
         let iterations = 0;
         while (iterations < players.length) {
-          const candidate = players[nextIdx];
-          if (!candidate.folded && candidate.chips > 0 && !candidate.actedThisRound) {
+          const c = players[nextIdx];
+          if (!c.folded && c.chips > 0 && !c.actedThisRound) {
             set({ gameState: { ...gs, currentPlayerIndex: nextIdx } });
             return;
           }
@@ -578,102 +630,173 @@ export const useGameStore = create<GameStore>()(
           iterations++;
         }
 
+        // Fallback: advance phase
         get().advancePhase();
       },
 
+      // ── Advance phase ──
       advancePhase: () => {
         const state = get();
         if (!state.gameState) return;
-
         const phases: GamePhase[] = ['preflop', 'flop', 'turn', 'river'];
         const currentIdx = phases.indexOf(state.gameState.currentPhase);
-
         if (currentIdx < phases.length - 1) {
-          const nextPhase = phases[currentIdx + 1];
-          get().dealCommunityCards(nextPhase);
+          get().dealCommunityCards(phases[currentIdx + 1]);
         } else {
           get().resolveHand();
         }
       },
 
+      // ── Resolve hand (showdown) ──
       resolveHand: () => {
         const state = get();
         if (!state.gameState) return;
-
         const gs = state.gameState;
-        const activePlayers = gs.players.filter(p => !p.folded);
-        if (activePlayers.length === 0) return;
+        const activePlayers = gs.players.filter(p => !p.folded && p.hand.length > 0);
 
-        if (activePlayers.length === 1) {
-          const winner = activePlayers[0];
-          set({
-            gameState: {
-              ...gs,
-              gameOver: true,
-              lastAction: `${winner.name} wins (everyone folded)!`,
-            },
-          });
-          get().endHand(winner.id);
+        // Safety: ensure all community cards are dealt
+        if (gs.communityCards.length < 5 && activePlayers.length > 1) {
+          get().autoDealRemainingCards();
+          // Re-read state after auto-dealing
+          const updatedState = get();
+          if (!updatedState.gameState) return;
+          return get().resolveHand();
+        }
+
+        if (activePlayers.length === 0) {
+          set({ gameState: { ...gs, gameOver: true, lastAction: 'Hand ended — all players folded' } });
           return;
         }
 
-        const playerEvals: { player: (typeof activePlayers)[0]; score: number; description: string }[] = [];
-        for (const player of activePlayers) {
-          const handEval = evaluateHand(player.hand, gs.communityCards);
-          playerEvals.push({ player, score: handEval.score, description: handEval.description });
+        // Single winner (everyone else folded)
+        if (activePlayers.length === 1) {
+          const winner = activePlayers[0];
+          const displayName = winner.id === 'human' ? 'You' : winner.name;
+          set({
+            gameState: {
+              ...gs, gameOver: true,
+              winner: { playerId: winner.id, hand: { ...evaluateHand(winner.hand, gs.communityCards), cards: winner.hand } },
+              winners: [{ playerId: winner.id, amount: gs.pot }],
+              lastAction: `${displayName} win (everyone folded)!`, sidePots: [],
+            },
+          });
+          get().endHand(winner.id, { [winner.id]: gs.pot });
+          return;
         }
 
-        playerEvals.sort((a, b) => b.score - a.score);
-        const bestScore = playerEvals[0].score;
-        const winners = playerEvals.filter(e => e.score === bestScore);
+        // Compute side pots
+        // Include ALL players who contributed to the pot (including folded — their money is dead but still in the pot)
+        const allContributors = gs.players.filter(p => p.totalHandBet > 0);
+        const nonFolded = allContributors.filter(p => !p.folded);
+        const sortedByBet = [...allContributors].sort((a, b) => a.totalHandBet - b.totalHandBet);
 
-        const winner = winners[0];
-        const winnerName = winner.player.id === 'human' ? 'You' : winner.player.name;
-        const description = winner.description;
+        const pots: { amount: number; eligiblePlayers: Player[] }[] = [];
+        let prevAmount = 0;
+        for (const p of sortedByBet) {
+          const contribution = p.totalHandBet - prevAmount;
+          if (contribution > 0) {
+            // ALL players who contributed at least this much (including folded — their money is in the pot)
+            const allAtLevel = allContributors.filter(pl => pl.totalHandBet >= p.totalHandBet);
+            // Only non-folded players are eligible to win
+            const eligible = nonFolded.filter(pl => pl.totalHandBet >= p.totalHandBet);
+            pots.push({ amount: contribution * allAtLevel.length, eligiblePlayers: eligible });
+          }
+          prevAmount = p.totalHandBet;
+        }
+
+        // Evaluate each pot
+        const distributions: Record<string, number> = {};
+        const allWinners: { playerId: string; amount: number }[] = [];
+        const potDescriptions: string[] = [];
+
+        for (const pot of pots) {
+          const evals = pot.eligiblePlayers.map(p => ({
+            player: p,
+            ...evaluateHand(p.hand, gs.communityCards),
+          }));
+          evals.sort((a, b) => b.score - a.score);
+          const bestScore = evals[0].score;
+          const potWinners = evals.filter(e => e.score === bestScore);
+          const share = Math.floor(pot.amount / potWinners.length);
+
+          for (const w of potWinners) {
+            distributions[w.player.id] = (distributions[w.player.id] || 0) + share;
+          }
+          // Remainder chips go to first winner
+          const remainder = pot.amount - share * potWinners.length;
+          if (remainder > 0 && potWinners.length > 0) {
+            distributions[potWinners[0].player.id] += remainder;
+          }
+
+          if (potWinners.length > 0) {
+            const wName = potWinners[0].player.id === 'human' ? 'You' : potWinners[0].player.name;
+            if (potWinners.length > 1) {
+              potDescriptions.push(`Split pot (${potWinners.length} ways): ${wName} + others`);
+            } else {
+              potDescriptions.push(`${wName}: ${potWinners[0].description}`);
+            }
+          }
+        }
+
+        // Pick primary winner for display
+        const primaryWinnerId = nonFolded.reduce((best, p) => {
+          const bestAmount = distributions[best] || 0;
+          const pAmount = distributions[p.id] || 0;
+          return pAmount > bestAmount ? p.id : best;
+        }, nonFolded[0].id);
+        const primaryPlayer = gs.players.find(p => p.id === primaryWinnerId)!;
+        const primaryDisplay = primaryPlayer.id === 'human' ? 'You' : primaryPlayer.name;
+        const primaryEval = evaluateHand(primaryPlayer.hand, gs.communityCards);
+
+        // Build winner entries
+        for (const [pid, amt] of Object.entries(distributions)) {
+          if (amt > 0) allWinners.push({ playerId: pid, amount: amt });
+        }
+
+        // Build side pot display
+        const sidePots: SidePot[] = pots.map(pot => ({
+          amount: pot.amount,
+          eligiblePlayerIds: pot.eligiblePlayers.map(p => p.id),
+        }));
 
         set({
           gameState: {
-            ...gs,
-            gameOver: true,
-            winner: {
-              playerId: winner.player.id,
-              hand: {
-                ...evaluateHand(winner.player.hand, gs.communityCards),
-                cards: winner.player.hand,
-              },
-            },
-            lastAction: `${winner.player.id === 'human' ? 'You win' : `${winnerName} wins`} with ${description}!`,
-            sidePots: [],
+            ...gs, gameOver: true,
+            winner: { playerId: primaryWinnerId, hand: primaryEval },
+            winners: allWinners,
+            lastAction: `${primaryDisplay} win with ${primaryEval.description}!`,
+            sidePots,
           },
         });
 
-        get().endHand(winner.player.id);
+        get().endHand(primaryWinnerId, distributions);
       },
 
-      endHand: (winnerId: string) => {
+      // ── End hand (distribute pots) ──
+      endHand: (winnerId: string, potDistribution?: Record<string, number>) => {
         const state = get();
         if (!state.gameState) return;
-
         const { gameState, stats, currentBankroll } = state;
-        const pot = gameState.pot;
-        const isHumanWinner = winnerId === 'human';
-        const humanPlayer = gameState.players.find(p => p.id === 'human');
-        const humanBetThisHand = humanPlayer?.totalBetThisRound || 0;
+        const dist = potDistribution || { [winnerId]: gameState.pot };
 
+        // Distribute chips
         const players = gameState.players.map(p => ({ ...p }));
-        const winnerIdx = players.findIndex(p => p.id === winnerId);
-        if (winnerIdx !== -1) {
-          players[winnerIdx].chips += pot;
+        for (const [pid, amt] of Object.entries(dist)) {
+          const idx = players.findIndex(pl => pl.id === pid);
+          if (idx !== -1 && amt > 0) players[idx].chips += amt;
         }
 
-        const newBankroll = isHumanWinner
-          ? currentBankroll + pot - humanBetThisHand
-          : currentBankroll - humanBetThisHand;
+        // Human bankroll tracking
+        const humanPlayer = players.find(p => p.id === 'human');
+        const humanHandBet = humanPlayer?.totalHandBet || 0;
+        const humanWon = dist['human'] || 0;
+        const humanNet = humanWon - humanHandBet;
+        const isHumanWinner = humanNet > 0;
+        const newBankroll = currentBankroll + humanNet;
 
         const newTotalHands = stats.totalHands + 1;
         const newAvgPot = stats.totalHands === 0
-          ? pot
-          : (stats.avgPotSize * stats.totalHands + pot) / newTotalHands;
+          ? gameState.pot : (stats.avgPotSize * stats.totalHands + gameState.pot) / newTotalHands;
         const newWinRate = ((stats.totalWon + (isHumanWinner ? 1 : 0)) / newTotalHands) * 100;
         const newROI = ((newBankroll - state.startingBankroll) / state.startingBankroll) * 100;
 
@@ -682,29 +805,28 @@ export const useGameStore = create<GameStore>()(
           totalHands: newTotalHands,
           totalWon: stats.totalWon + (isHumanWinner ? 1 : 0),
           totalLost: stats.totalLost + (isHumanWinner ? 0 : 1),
-          biggestWin: Math.max(stats.biggestWin, isHumanWinner ? pot - humanBetThisHand : 0),
-          biggestLoss: Math.min(stats.biggestLoss, isHumanWinner ? 0 : -humanBetThisHand),
+          biggestWin: Math.max(stats.biggestWin, isHumanWinner ? humanNet : 0),
+          biggestLoss: Math.min(stats.biggestLoss, isHumanWinner ? 0 : humanNet),
           avgPotSize: newAvgPot,
           botSessions: stats.botSessions + 1,
           botWins: stats.botWins + (isHumanWinner ? 0 : 1),
           botLosses: stats.botLosses + (isHumanWinner ? 1 : 0),
-          winRate: newWinRate,
-          roi: newROI,
+          winRate: newWinRate, roi: newROI,
           bankrollHistory: [...stats.bankrollHistory, newBankroll],
         };
 
-        // Track training bot stats
-        const tbotPlayer = gameState.players.find(p => p.id === 'training-bot');
-        const tbotBet = tbotPlayer?.totalBetThisRound || 0;
-        const isTbotWinner = winnerId === 'training-bot';
-        const tbotProfit = isTbotWinner ? (pot - tbotBet) : -tbotBet;
+        // T-Bot tracking
+        const tbot = players.find(p => p.id === 'training-bot');
+        const tbotHandBet = tbot?.totalHandBet || 0;
+        const tbotWon = dist['training-bot'] || 0;
+        const tbotProfit = tbotWon - tbotHandBet;
         const prevTbot = state.tbotStats;
         const newTbotHands = prevTbot.handsPlayed + 1;
         const newTbotStats: TBotStats = {
           handsPlayed: newTbotHands,
-          handsWon: prevTbot.handsWon + (isTbotWinner ? 1 : 0),
-          handsLost: prevTbot.handsLost + (isTbotWinner ? 0 : 1),
-          winRate: ((prevTbot.handsWon + (isTbotWinner ? 1 : 0)) / newTbotHands) * 100,
+          handsWon: prevTbot.handsWon + (tbotProfit > 0 ? 1 : 0),
+          handsLost: prevTbot.handsLost + (tbotProfit > 0 ? 0 : 1),
+          winRate: ((prevTbot.handsWon + (tbotProfit > 0 ? 1 : 0)) / newTbotHands) * 100,
           totalProfit: prevTbot.totalProfit + tbotProfit,
           bankrollHistory: [...prevTbot.bankrollHistory, prevTbot.totalProfit + tbotProfit],
         };
@@ -713,109 +835,53 @@ export const useGameStore = create<GameStore>()(
           handNumber: gameState.handNumber,
           winner: players.find(p => p.id === winnerId)?.name || winnerId,
           winningHand: gameState.winner?.hand.description || '',
-          potSize: pot,
-          duration: 0,
-          startTime: Date.now(),
-          endTime: Date.now(),
-          botResult: isHumanWinner ? (pot - humanBetThisHand) : -humanBetThisHand,
-          bluffs: 0,
-          mistakes: 0,
+          potSize: gameState.pot, duration: 0,
+          startTime: Date.now(), endTime: Date.now(),
+          botResult: humanNet, bluffs: 0, mistakes: 0,
           numPlayers: gameState.players.length,
         };
 
         set({
-          stats: newStats,
-          tbotStats: newTbotStats,
+          stats: newStats, tbotStats: newTbotStats,
           gameHistory: [...state.gameHistory, historyEntry],
           currentBankroll: newBankroll,
           gameState: { ...gameState, players },
         });
       },
 
-      updateBotSettings: (settings) => {
-        set(state => ({
-          botSettings: { ...state.botSettings, ...settings },
-        }));
-      },
-
-      updateTrainingBotSettings: (settings) => {
-        set(state => ({
-          trainingBotSettings: { ...state.trainingBotSettings, ...settings },
-        }));
-      },
-
-      setPersonality: (personality) => {
-        const settings = createBotSettings(personality);
-        set({ botSettings: settings, selectedBotPersonality: personality });
-      },
-
-      setTrainingPersonality: (personality) => {
-        const settings = createBotSettings(personality);
-        set({ trainingBotSettings: settings });
-      },
-
-      setOpponentPersonality: (personality) => {
-        const settings = createOpponentSettings(personality);
-        set({ botSettings: settings, opponentPersonality: personality });
-      },
-
+      // ── Settings & utilities ──
+      updateBotSettings: (settings) => set(s => ({ botSettings: { ...s.botSettings, ...settings } })),
+      updateTrainingBotSettings: (settings) => set(s => ({ trainingBotSettings: { ...s.trainingBotSettings, ...settings } })),
+      setPersonality: (personality) => set({ botSettings: createBotSettings(personality), selectedBotPersonality: personality }),
+      setTrainingPersonality: (personality) => set({ trainingBotSettings: createBotSettings(personality) }),
+      setOpponentPersonality: (personality) => set({ botSettings: createOpponentSettings(personality), opponentPersonality: personality }),
       setTableSize: (size) => set({ tableSize: size }),
       setBuyIn: (buyIn) => set({ buyIn }),
       setStartingBankroll: (amount) => set({ startingBankroll: amount }),
-
-      toggleRiskOverlay: () => {
-        set(state => ({ showRiskOverlay: !state.showRiskOverlay }));
-      },
-
-      toggleTableTalk: () => {
-        set(state => ({ showTableTalk: !state.showTableTalk }));
-      },
-
-      toggleShowCardsAtEnd: () => {
-        set(state => ({ showCardsAtEnd: !state.showCardsAtEnd }));
-      },
-
-      toggleAutoPlayMode: () => {
-        set(state => ({ autoPlayMode: !state.autoPlayMode }));
-      },
-
-      resetStats: () => {
-        set({
-          stats: { ...DEFAULT_STATS },
-          currentBankroll: get().startingBankroll,
-          gameHistory: [],
-          botEvaluations: [],
-        });
-      },
-
+      toggleRiskOverlay: () => set(s => ({ showRiskOverlay: !s.showRiskOverlay })),
+      toggleTableTalk: () => set(s => ({ showTableTalk: !s.showTableTalk })),
+      toggleShowCardsAtEnd: () => set(s => ({ showCardsAtEnd: !s.showCardsAtEnd })),
+      toggleAutoPlayMode: () => set(s => ({ autoPlayMode: !s.autoPlayMode })),
+      resetStats: () => set({ stats: { ...DEFAULT_STATS }, currentBankroll: get().startingBankroll, gameHistory: [], botEvaluations: [] }),
       nextHand: () => {
-        const state = get();
-        if (!state.isPlaying) {
-          if (!state.gameState) get().initializeGame();
-          get().startHand();
-        } else if (state.gameState?.gameOver) {
-          get().startHand();
-        }
+        const st = get();
+        if (!st.isPlaying) { if (!st.gameState) get().initializeGame(); get().startHand(); }
+        else if (st.gameState?.gameOver) { get().startHand(); }
       },
-
       setAutoPlaySpeed: (speed) => set({ autoPlaySpeed: speed }),
-
-      quitGame: () => {
-        set({
-          isPlaying: false,
-          gameState: null,
-          gamePhase: 'preflop',
-          isDealing: false,
+      quitGame: () => set({ isPlaying: false, gameState: null, gamePhase: 'preflop', isDealing: false }),
+      addHumanChips: (amount: number) => {
+        const st = get();
+        if (!st.gameState || amount <= 0) return;
+        const players = st.gameState.players.map(p => {
+          if (p.isBot) return p;
+          return { ...p, chips: p.chips + amount, isAllIn: p.chips === 0 && p.chips + amount > 0 ? false : p.isAllIn };
         });
+        set({ gameState: { ...st.gameState, players }, currentBankroll: st.currentBankroll + amount });
       },
-
       recordHumanDecision: (decision) => {
-        const state = get();
-        const entry: BotEvaluationEntry = {
-          ...decision,
-          handNumber: state.gameState?.handNumber || 0,
-        };
-        set({ botEvaluations: [...state.botEvaluations, entry] });
+        const st = get();
+        set({ botEvaluations: [...st.botEvaluations, { ...decision, handNumber: st.gameState?.handNumber || 0 }] });
       },
     }),
     {
@@ -823,17 +889,12 @@ export const useGameStore = create<GameStore>()(
       partialize: (state) => ({
         stats: { ...state.stats },
         tbotStats: { ...state.tbotStats, bankrollHistory: [...state.tbotStats.bankrollHistory] },
-        currentBankroll: state.currentBankroll,
-        startingBankroll: state.startingBankroll,
-        gameHistory: [...state.gameHistory],
-        botEvaluations: [...state.botEvaluations],
+        currentBankroll: state.currentBankroll, startingBankroll: state.startingBankroll,
+        gameHistory: [...state.gameHistory], botEvaluations: [...state.botEvaluations],
         selectedBotPersonality: state.selectedBotPersonality,
-        tableSize: state.tableSize,
-        buyIn: state.buyIn,
-        blinds: { ...state.blinds },
+        tableSize: state.tableSize, buyIn: state.buyIn, blinds: { ...state.blinds },
         autoPlaySpeed: state.autoPlaySpeed,
-        isPlaying: state.isPlaying,
-        gameState: state.gameState,
+        isPlaying: state.isPlaying, gameState: state.gameState,
         trainingBotSettings: { ...state.trainingBotSettings },
         botSettings: { ...state.botSettings },
         opponentPersonality: state.opponentPersonality,

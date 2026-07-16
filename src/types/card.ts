@@ -19,6 +19,11 @@ export interface HandEvaluation {
   description: string;
 }
 
+export interface SidePot {
+  amount: number;
+  eligiblePlayerIds: string[];
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -31,6 +36,8 @@ export interface Player {
   avatar?: string;
   position: number;
   totalBetThisRound: number;
+  totalHandBet: number;     // cumulative chips contributed this entire hand (for side pots)
+  isAllIn: boolean;
   actedThisRound: boolean;
 }
 
@@ -40,17 +47,20 @@ export interface GameState {
   players: Player[];
   communityCards: Card[];
   pot: number;
-  sidePots: number[];
+  sidePots: SidePot[];
   currentPhase: GamePhase;
   dealerPosition: number;
   currentPlayerIndex: number;
   currentBet: number;
   minRaise: number;
+  lastRaiseAmount: number;  // size of the last raise (for re-raise minimum)
   handNumber: number;
   deck: Card[];
   gameOver: boolean;
   winner?: { playerId: string; hand: HandEvaluation };
+  winners?: { playerId: string; amount: number }[];  // multi-winner distribution
   lastAction?: string;
   sbPosition: number;
   bbPosition: number;
+  preflopRaised: boolean;   // whether anyone raised preflop (for BB option)
 }

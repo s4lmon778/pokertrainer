@@ -5,8 +5,7 @@
 @layer base {
   html {
     font-family: 'Outfit', system-ui, sans-serif;
-    background: #0f1117;
-    color: #f1f5f9;
+    @apply bg-surface text-text-primary;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -18,34 +17,173 @@
   ::-webkit-scrollbar-track { background: #0f1117; }
   ::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: #3a3d4a; }
+
+  /* ── Focus-visible: keyboard navigation ── */
+  *:focus-visible {
+    outline: 2px solid #d4af37;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible {
+    outline: 2px solid #d4af37;
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #d4af37;
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+  input[type="range"]:focus-visible {
+    outline: 2px solid #d4af37;
+    outline-offset: 3px;
+  }
 }
 
 @layer components {
-  /* Primary action button — gold with glow */
+  /* ── BUTTONS ── */
+
   .btn-primary {
     @apply px-5 py-2.5 bg-gradient-to-br from-gold-light via-gold to-gold-dark text-black font-bold rounded-xl
            transition-all duration-200 shadow-md
            hover:shadow-lg hover:from-[#f5dd80] hover:via-[#e0c040] hover:to-[#c9a420]
-           active:scale-[0.97];
+           active:scale-[0.97]
+           disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:shadow-md disabled:hover:from-gold-light disabled:hover:via-gold disabled:hover:to-gold-dark disabled:active:scale-100;
   }
 
-  /* Secondary button — glass surface */
   .btn-secondary {
     @apply px-5 py-2.5 bg-white/5 text-text-primary font-medium rounded-xl
            transition-all duration-200 border border-white/10 backdrop-blur-sm
            hover:bg-white/10 hover:border-white/20
-           active:scale-[0.97];
+           active:scale-[0.97]
+           disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/5 disabled:hover:border-white/10 disabled:active:scale-100;
   }
 
-  /* Danger button — red gradient */
+  .btn-call {
+    @apply px-5 py-2.5 bg-accent-blue/15 border border-accent-blue/30 text-accent-blue font-bold rounded-xl
+           transition-all duration-200
+           hover:bg-accent-blue/25 hover:border-accent-blue/50 hover:shadow-[0_4px_16px_-4px_rgba(59,130,246,0.4)]
+           active:scale-[0.97]
+           disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-accent-blue/15 disabled:hover:border-accent-blue/30 disabled:hover:shadow-none disabled:active:scale-100;
+  }
+
+  .btn-allin {
+    @apply px-4 py-2.5 rounded-xl text-sm font-black bg-gradient-to-r from-red-500 to-red-600 text-white
+           transition-all duration-200 shadow-red
+           hover:shadow-[0_4px_20px_-4px_rgba(239,68,68,0.6)]
+           active:scale-95
+           disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:shadow-red disabled:active:scale-100;
+  }
+
   .btn-danger {
     @apply px-5 py-2.5 bg-gradient-to-br from-red-500 to-red-600 text-white font-bold rounded-xl
            transition-all duration-200 shadow-md
            hover:shadow-lg hover:from-red-400 hover:to-red-500
-           active:scale-[0.97];
+           active:scale-[0.97]
+           disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:shadow-md disabled:hover:from-red-500 disabled:hover:to-red-600 disabled:active:scale-100;
   }
 
-  /* Glass card */
+  .btn-ghost {
+    @apply px-4 py-2 bg-transparent text-text-secondary/70 font-medium rounded-xl
+           transition-all duration-200 border border-transparent
+           hover:bg-white/5 hover:text-text-primary hover:border-white/10
+           active:scale-[0.97]
+           disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-secondary/70 disabled:hover:border-transparent disabled:active:scale-100;
+  }
+
+  /* ── PREMIUM CARD COMPONENT ── */
+
+  .playing-card {
+    @apply relative rounded-xl select-none;
+    transform-style: preserve-3d;
+    perspective: 800px;
+  }
+
+  .playing-card-inner {
+    @apply relative w-full h-full transition-transform duration-500;
+    transform-style: preserve-3d;
+  }
+
+  .playing-card:hover .playing-card-inner {
+    transform: rotateY(10deg) scale(1.08);
+    z-index: 30;
+  }
+
+  .card-face {
+    @apply absolute inset-0 rounded-xl backface-hidden;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+
+  .card-back-face {
+    transform: rotateY(0deg);
+  }
+
+  .card-front-face {
+    transform: rotateY(180deg);
+  }
+
+  /* Card back pattern */
+  .card-back-design {
+    background:
+      repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.03) 3px, rgba(255,255,255,0.03) 6px),
+      repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(255,255,255,0.03) 3px, rgba(255,255,255,0.03) 6px),
+      linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+  }
+
+  /* ── CHIP STACK ── */
+
+  .poker-chip {
+    @apply relative rounded-full inline-flex items-center justify-center;
+    box-shadow:
+      0 2px 0 -1px rgba(0,0,0,0.2),
+      0 4px 0 -2px rgba(0,0,0,0.15),
+      0 6px 0 -3px rgba(0,0,0,0.1),
+      0 8px 12px -4px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      inset 0 -1px 0 rgba(0,0,0,0.1);
+  }
+
+  .poker-chip::before {
+    content: '';
+    @apply absolute inset-1 rounded-full border-2 border-dashed opacity-30;
+    border-color: rgba(255,255,255,0.4);
+  }
+
+  .chip-red { @apply bg-gradient-to-br from-red-500 via-red-600 to-red-800; }
+  .chip-blue { @apply bg-gradient-to-br from-blue-500 via-blue-600 to-blue-800; }
+  .chip-green { @apply bg-gradient-to-br from-green-500 via-green-600 to-green-800; }
+  .chip-black { @apply bg-gradient-to-br from-gray-400 via-gray-700 to-gray-900; }
+  .chip-gold { @apply bg-gradient-to-br from-amber-300 via-gold to-amber-700; }
+
+  /* ── ACTION BADGES ── */
+
+  .action-badge {
+    @apply absolute z-40 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider
+           shadow-lg pointer-events-none;
+    animation: badgePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+               fadeOut 0.3s ease-in 1.5s forwards;
+  }
+
+  .badge-fold { @apply bg-red-500 text-white; box-shadow: 0 4px 16px -4px rgba(239,68,68,0.5); }
+  .badge-check { @apply bg-emerald-500 text-white; box-shadow: 0 4px 16px -4px rgba(16,185,129,0.5); }
+  .badge-call { @apply bg-blue-500 text-white; box-shadow: 0 4px 16px -4px rgba(59,130,246,0.5); }
+  .badge-raise { @apply bg-amber-500 text-black; box-shadow: 0 4px 16px -4px rgba(245,158,11,0.5); }
+  .badge-allin { @apply bg-gradient-to-r from-red-500 to-amber-500 text-white; box-shadow: 0 4px 20px -4px rgba(239,68,68,0.6); }
+
+  @keyframes fadeOut {
+    to { opacity: 0; transform: translateY(-8px); }
+  }
+
+  /* ── CARDS ── */
+
   .card {
     @apply bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm p-5
            shadow-card transition-all duration-300;
@@ -54,19 +192,18 @@
     @apply shadow-card-hover border-white/15;
   }
 
-  /* Premium card — more glass, more glow */
   .card-premium {
     @apply bg-white/[0.06] rounded-2xl border border-white/[0.12] backdrop-blur-md p-5
            shadow-card transition-all duration-300;
   }
 
-  /* Glass panel — for overlays */
   .glass {
     @apply bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
   }
 
-  /* Input field */
+  /* ── INPUTS ── */
+
   .input-field {
     @apply w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-xl
            text-text-primary placeholder-text-secondary/50
@@ -77,12 +214,62 @@
     @apply bg-surface-elevated text-text-primary;
   }
 
-  /* Animated card deal */
+  .slider-gold {
+    @apply w-full h-2 rounded-full appearance-none cursor-pointer;
+    background: linear-gradient(to right, #d4af37 0%, #d4af37 var(--slider-pct, 50%), #2a2d3a var(--slider-pct, 50%), #2a2d3a 100%);
+  }
+  .slider-gold::-webkit-slider-thumb {
+    @apply appearance-none w-5 h-5 rounded-full bg-gold border-2 border-black/30 shadow-md cursor-pointer;
+    transition: transform 0.15s ease;
+  }
+  .slider-gold::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .slider-gold::-webkit-slider-thumb:active { transform: scale(0.95); }
+  .slider-gold::-moz-range-thumb {
+    @apply w-5 h-5 rounded-full bg-gold border-2 border-black/30 shadow-md cursor-pointer border-none;
+  }
+
+  .slider-cyan {
+    @apply w-full h-2 rounded-full appearance-none cursor-pointer;
+    background: linear-gradient(to right, #06b6d4 0%, #06b6d4 var(--slider-pct, 50%), #2a2d3a var(--slider-pct, 50%), #2a2d3a 100%);
+  }
+  .slider-cyan::-webkit-slider-thumb {
+    @apply appearance-none w-5 h-5 rounded-full bg-cyan-400 border-2 border-black/30 shadow-md cursor-pointer;
+    transition: transform 0.15s ease;
+  }
+  .slider-cyan::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .slider-cyan::-webkit-slider-thumb:active { transform: scale(0.95); }
+  .slider-cyan::-moz-range-thumb {
+    @apply w-5 h-5 rounded-full bg-cyan-400 border-2 border-black/30 shadow-md cursor-pointer border-none;
+  }
+
+  /* ── ANIMATIONS ── */
+
   .animate-deal {
     animation: deal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
-  /* Glow ring for active elements */
+  .animate-deal-stagger {
+    animation: dealStagger 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-deal-flip {
+    animation: dealFlip 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-chip {
+    animation: chipAppear 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .animate-celebrate {
+    animation: celebrate 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .animate-pot-pulse {
+    animation: potPulse 0.4s ease-out;
+  }
+
+  /* ── GLOWS ── */
+
   .glow-gold {
     box-shadow: 0 0 12px rgba(212, 175, 55, 0.4), 0 0 30px rgba(212, 175, 55, 0.15);
   }
@@ -92,15 +279,97 @@
   .glow-green {
     box-shadow: 0 0 12px rgba(34, 197, 94, 0.4), 0 0 20px rgba(34, 197, 94, 0.1);
   }
+  .glow-red {
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.4), 0 0 20px rgba(239, 68, 68, 0.1);
+  }
 
-  /* Value highlight */
-  .value-up {
-    @apply text-accent-green font-bold;
+  /* ── VALUE INDICATORS ── */
+
+  .value-up { @apply text-accent-green font-bold; }
+  .value-down { @apply text-accent-red font-bold; }
+  .value-neutral { @apply text-accent-yellow font-bold; }
+
+  /* ── TOOLTIP ── */
+
+  .tooltip-content {
+    @apply absolute z-50 px-3 py-2 bg-surface-elevated border border-white/20 rounded-xl
+           text-xs text-text-primary shadow-xl backdrop-blur-md whitespace-nowrap
+           pointer-events-none opacity-0 transition-opacity duration-150;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   }
-  .value-down {
-    @apply text-accent-red font-bold;
+  .tooltip-trigger:hover .tooltip-content,
+  .tooltip-trigger:focus-within .tooltip-content {
+    @apply opacity-100;
   }
-  .value-neutral {
-    @apply text-accent-yellow font-bold;
+
+  /* ── LOADING ── */
+
+  .loading-spinner {
+    @apply inline-block w-4 h-4 border-2 border-white/20 border-t-gold rounded-full animate-spin;
+  }
+  .loading-dots::after {
+    content: '';
+    animation: loadingDots 1.5s steps(3, end) infinite;
+  }
+
+  /* ── GAME HISTORY TABLE ── */
+
+  .history-table th {
+    @apply text-left text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold py-2 px-3;
+  }
+  .history-table td {
+    @apply py-2.5 px-3 text-sm border-t border-white/5;
+  }
+
+  .history-table tr.row-win td {
+    @apply bg-green-500/5;
+  }
+  .history-table tr.row-loss td {
+    @apply bg-red-500/5;
+  }
+  .history-table tr.row-win:hover td {
+    @apply bg-green-500/10;
+  }
+  .history-table tr.row-loss:hover td {
+    @apply bg-red-500/10;
+  }
+  .history-table tr:hover td {
+    @apply bg-white/[0.03];
+  }
+}
+
+@layer utilities {
+  /* Stagger animation delay utilities */
+  .delay-0 { animation-delay: 0ms; }
+  .delay-75 { animation-delay: 75ms; }
+  .delay-150 { animation-delay: 150ms; }
+  .delay-225 { animation-delay: 225ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+
+  .backface-hidden {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+
+  /* Winner shimmer background */
+  .bg-winner-shimmer {
+    background: linear-gradient(110deg, transparent 30%, rgba(212,175,55,0.15) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* Card inner shadow for premium look */
+  .card-inner-shadow {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.1);
+  }
+
+  /* Felt texture helper */
+  .felt-overlay {
+    background-image:
+      radial-gradient(ellipse at 50% 40%, rgba(45,122,79,0.3) 0%, transparent 70%),
+      url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='80' height='80' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    background-blend-mode: overlay;
   }
 }

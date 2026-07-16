@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGameStore } from '../store/gameStore';
+import { computeEquity, computeActionWinRates, winRateTextClass } from '../utils/equity';
 import { evaluateHand } from '../utils/handEvaluator';
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts';
 import { Percent, Target, TrendingUp, Shield } from 'lucide-react';
@@ -13,50 +14,19 @@ const RiskOverlay: React.FC = () => {
   const humanPlayer = gameState.players.find(p => !p.isBot);
   if (!humanPlayer || humanPlayer.folded) return null;
 
-  const handEval = evaluateHand(humanPlayer.hand, gameState.communityCards);
-  const strengthPercent = Math.min(100, Math.max(0, (handEval.score / 9500000) * 100));
-
   const activeOpponents = gameState.players.filter(p => p.isBot && !p.folded && p.chips > 0).length;
-  const cardsSeen = humanPlayer.hand.length + gameState.communityCards.length;
-  const communityCount = gameState.communityCards.length;
-  const opponentPenalty = activeOpponents > 1 ? Math.min(0.3, (activeOpponents - 1) * 0.1) : 0;
+  const rawEquity = computeEquity(humanPlayer, gameState.communityCards, gameState.currentPhase, activeOpponents);
+  const equityPct = rawEquity * 100;
 
-  let rawEquity: number;
-  if (communityCount === 0 && humanPlayer.hand.length >= 2) {
-    const isPair = humanPlayer.hand[0].rank === humanPlayer.hand[1].rank;
-    const suited = humanPlayer.hand[0].suit === humanPlayer.hand[1].suit;
-    const rankValues = humanPlayer.hand.map(c => {
-      const r = c.rank;
-      if (r === 'A') return 14; if (r === 'K') return 13; if (r === 'Q') return 12; if (r === 'J') return 11;
-      return parseInt(r);
-    });
-    const high = Math.max(...rankValues);
-    const low = Math.min(...rankValues);
-    const gap = high - low;
-
-    let equity = 0.35;
-    if (isPair) { equity = 0.45 + (high / 14) * 0.15; }
-    else {
-      equity = 0.25 + ((high + low) / 28) * 0.25;
-      if (suited) equity += 0.04;
-      if (gap <= 2) equity += 0.03;
-      if (high >= 13) equity += 0.03;
-    }
-    rawEquity = Math.min(0.95, Math.max(0.05, equity * (1 - opponentPenalty)));
-  } else {
-    rawEquity = Math.min(0.95, Math.max(0.05, (strengthPercent / 100) * (1 - opponentPenalty)));
-  }
+  const handEval = evaluateHand(humanPlayer.hand, gameState.communityCards);
+  const strengthPercent = Math.min(100, Math.max(0, (handEval.score / 9_500_000) * 100));
 
   const toCall = gameState.currentBet - humanPlayer.bet;
   const potOdds = toCall > 0 ? (toCall / (gameState.pot + toCall)) * 100 : 0;
   const expectedValue = (rawEquity * (gameState.pot + toCall)) - ((1 - rawEquity) * toCall);
-  const equityPct = rawEquity * 100;
-  const betRatio = toCall > 0 ? toCall / Math.max(1, gameState.pot + toCall) : 0;
-  const foldEquityBonus = toCall > 0 ? Math.min(12, betRatio * 30) : 0;
-  const raisePct = Math.min(95, equityPct + foldEquityBonus);
-  const allInPct = Math.min(95, equityPct + foldEquityBonus * 3);
 
-  const winColor = (pct: number) => pct >= 55 ? 'text-accent-green' : pct >= 30 ? 'text-accent-yellow' : 'text-accent-red';
+  const actionRates = computeActionWinRates(humanPlayer, gameState.communityCards, gameState.currentPhase, gameState.currentBet, gameState.pot, activeOpponents);
+
   const barColor = (pct: number) => pct >= 60 ? '#22c55e' : pct >= 35 ? '#d4af37' : '#ef4444';
 
   const barData = [
@@ -73,7 +43,7 @@ const RiskOverlay: React.FC = () => {
           <Percent size={14} className="text-gold" />
           <span className="text-[11px] text-text-secondary/60 uppercase tracking-wider font-bold">Win Rate</span>
         </div>
-        <div className={`text-4xl font-black font-mono ${winColor(equityPct)}`}>
+        <div className={`text-4xl font-black font-mono ${winRateTextClass(equityPct)}`}>
           {equityPct.toFixed(1)}<span className="text-xl">%</span>
         </div>
         <div className="text-xs font-semibold text-text-secondary/60 mt-0.5">{handEval.description}</div>
@@ -95,12 +65,12 @@ const RiskOverlay: React.FC = () => {
           {[
             { action: 'Fold', pct: 0, muted: true },
             { action: toCall > 0 ? 'Call' : 'Check', pct: equityPct },
-            { action: 'Raise', pct: raisePct },
-            { action: 'All-In', pct: allInPct },
+            { action: 'Raise', pct: actionRates.raise },
+            { action: 'All-In', pct: actionRates.allIn },
           ].map(row => (
             <div key={row.action} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/[0.03]">
               <span className={`text-sm font-semibold ${row.muted ? 'text-text-secondary/30' : 'text-text-secondary/70'}`}>{row.action}</span>
-              <span className={`text-sm font-black font-mono ${row.muted ? 'text-text-secondary/20' : winColor(row.pct)}`}>
+              <span className={`text-sm font-black font-mono ${row.muted ? 'text-text-secondary/20' : winRateTextClass(row.pct)}`}>
                 {row.pct.toFixed(row.pct === 0 ? 0 : 1)}%
               </span>
             </div>
@@ -150,7 +120,7 @@ const RiskOverlay: React.FC = () => {
           {barData.map(d => <span key={d.name}>{d.name}</span>)}
         </div>
         <div className="text-center text-[10px] text-text-secondary/40 mt-0.5 font-mono">
-          Score: {handEval.score.toLocaleString()} · {cardsSeen}/7 cards · {activeOpponents} opp
+          Score: {handEval.score.toLocaleString()} · {humanPlayer.hand.length + gameState.communityCards.length}/7 cards · {activeOpponents} opp
         </div>
       </div>
     </div>

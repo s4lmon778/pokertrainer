@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
 import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users } from 'lucide-react';
@@ -31,7 +31,7 @@ const SettingsPanel: React.FC = () => {
 
   const handleNumBotsChange = (delta: number) => {
     const newCount = numBots + delta;
-    if (newCount < 2) return; // min 2 bots (1 training + 1 opponent)
+    if (newCount < 2) return;
     if (newCount > 8) return;
     setNumBots(newCount);
     setTableSize(newCount + 1);
@@ -44,8 +44,48 @@ const SettingsPanel: React.FC = () => {
     { value: 'balanced', label: 'Balanced', desc: 'Mixed approach', color: 'from-purple-500 to-violet-600' },
   ];
 
-  const handleTrainingChange = (key: keyof BotSettings, value: number | string) => {
+  const handleTrainingChange = useCallback((key: keyof BotSettings, value: number | string) => {
     updateTrainingBotSettings({ [key]: value as never });
+  }, [updateTrainingBotSettings]);
+
+  // ── Slider sub-component ──
+  const SliderControl: React.FC<{
+    label: string;
+    icon: React.ReactNode;
+    value: number;
+    min: number;
+    max: number;
+    step?: number;
+    unit?: string;
+    colorClass?: string;
+    onChange: (value: number) => void;
+  }> = ({ label, icon, value, min, max, step = 1, unit = '%', colorClass = 'slider-cyan', onChange }) => {
+    const pct = ((value - min) / (max - min)) * 100;
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-text-secondary flex items-center gap-1">{icon}{label}</span>
+          <span className="text-cyan-400 font-mono text-xs font-bold">{value.toFixed(0)}{unit}</span>
+        </div>
+        <div className="relative">
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={e => onChange(parseFloat(e.target.value))}
+            className={colorClass}
+            style={{ '--slider-pct': `${pct}%` } as React.CSSProperties}
+          />
+          {/* Tick marks */}
+          <div className="flex justify-between px-[2px] mt-0.5">
+            <span className="text-[9px] text-text-secondary/30 font-mono">{min}{unit}</span>
+            <span className="text-[9px] text-text-secondary/30 font-mono">{max}{unit}</span>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -54,32 +94,32 @@ const SettingsPanel: React.FC = () => {
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
           <Users size={16} className="text-gold" />
-          <span className="font-medium">Table Setup</span>
+          <span className="font-bold text-sm">Table Setup</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
           <div>
-            <label className="text-xs text-text-secondary mb-1 block">Bots (1 Training + opponents)</label>
+            <label className="text-xs text-text-secondary mb-1 block font-semibold">Bots (1 Training + opponents)</label>
             <div className="flex items-center gap-1.5">
               <button onClick={() => handleNumBotsChange(-1)} disabled={numBots <= 2}
-                className="w-7 h-7 rounded-lg bg-surface border border-surface-border flex items-center justify-center hover:border-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:border-gold hover:text-gold disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-white/10 disabled:hover:text-text-primary transition-all">
                 <Minus size={14} />
               </button>
-              <span className="text-base font-bold text-gold font-mono w-7 text-center">{numBots}</span>
+              <span className="text-lg font-bold text-gold font-mono w-8 text-center">{numBots}</span>
               <button onClick={() => handleNumBotsChange(1)} disabled={numBots >= 8}
-                className="w-7 h-7 rounded-lg bg-surface border border-surface-border flex items-center justify-center hover:border-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:border-gold hover:text-gold disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-white/10 disabled:hover:text-text-primary transition-all">
                 <Plus size={14} />
               </button>
-              <span className="text-[10px] text-text-secondary/50">({numBots + 1}p)</span>
+              <span className="text-[10px] text-text-secondary/50 font-mono">({numBots + 1}p)</span>
             </div>
           </div>
           <div>
-            <label className="text-xs text-text-secondary mb-1 block">Buy-In</label>
+            <label className="text-xs text-text-secondary mb-1 block font-semibold">Buy-In</label>
             <select value={buyIn} onChange={e => setBuyIn(parseInt(e.target.value))} className="input-field">
               {[25, 50, 100, 200, 500, 1000].map(n => (<option key={n} value={n}>${n}</option>))}
             </select>
           </div>
           <div>
-            <label className="text-xs text-text-secondary mb-1 block">Starting Bankroll</label>
+            <label className="text-xs text-text-secondary mb-1 block font-semibold">Starting Bankroll</label>
             <select value={startingBankroll} onChange={e => setStartingBankroll(parseInt(e.target.value))} className="input-field">
               {[100, 250, 500, 1000, 2000, 5000].map(n => (<option key={n} value={n}>${n}</option>))}
             </select>
@@ -87,7 +127,7 @@ const SettingsPanel: React.FC = () => {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-text-secondary mb-1 block">Auto-Play Speed</label>
+            <label className="text-xs text-text-secondary mb-1 block font-semibold">Auto-Play Speed</label>
             <select value={autoPlaySpeed} onChange={e => setAutoPlaySpeed(parseInt(e.target.value))} className="input-field">
               <option value={150}>Very Fast (150ms)</option>
               <option value={400}>Normal (400ms)</option>
@@ -96,10 +136,14 @@ const SettingsPanel: React.FC = () => {
             </select>
           </div>
           <div className="flex items-end justify-between pb-2">
-            <label className="text-xs text-text-secondary">Reveal bot cards at end</label>
+            <div>
+              <label className="text-xs text-text-secondary font-semibold block mb-1">Reveal bot cards at end</label>
+              <span className="text-[10px] text-text-secondary/40">{showCardsAtEnd ? 'Cards shown at showdown' : 'Cards hidden'}</span>
+            </div>
             <button onClick={toggleShowCardsAtEnd}
-              className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${showCardsAtEnd ? 'bg-gold' : 'bg-surface-border'}`}>
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${showCardsAtEnd ? 'left-5' : 'left-0.5'}`} />
+              className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${showCardsAtEnd ? 'bg-gold' : 'bg-surface-border'}`}
+              aria-label={showCardsAtEnd ? 'Hide cards at end' : 'Show cards at end'}>
+              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${showCardsAtEnd ? 'left-5' : 'left-0.5'}`} />
             </button>
           </div>
         </div>
@@ -113,7 +157,7 @@ const SettingsPanel: React.FC = () => {
           <div className="w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center">
             <FlaskConical size={12} className="text-white" />
           </div>
-          <span className="font-bold text-cyan-400">Training Bot</span>
+          <span className="font-bold text-sm text-cyan-400">Training Bot</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold uppercase">T-Bot</span>
         </div>
         <p className="text-xs text-text-secondary mb-3">
@@ -122,16 +166,16 @@ const SettingsPanel: React.FC = () => {
 
         {/* Personality Presets */}
         <div className="mb-3">
-          <label className="text-xs text-text-secondary mb-1.5 block">Personality Preset</label>
+          <label className="text-xs text-text-secondary mb-1.5 block font-semibold">Personality Preset</label>
           <div className="grid grid-cols-2 gap-1.5">
             {personalities.map(p => (
               <button
                 key={p.value}
                 onClick={() => setTrainingPersonality(p.value)}
-                className={`p-2 rounded-lg border text-left transition-all ${
+                className={`p-2 rounded-xl border text-left transition-all ${
                   trainingPersonality === p.value
-                    ? 'border-cyan-400 bg-cyan-400/10'
-                    : 'border-surface-border hover:border-surface-elevated'
+                    ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                    : 'border-surface-border hover:border-surface-elevated hover:bg-white/[0.03]'
                 }`}
               >
                 <div className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold text-white bg-gradient-to-r ${p.color} mb-0.5`}>
@@ -145,45 +189,39 @@ const SettingsPanel: React.FC = () => {
 
         {/* Training Bot Sliders */}
         <div className="space-y-3">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-text-secondary flex items-center gap-1"><Zap size={12} className="text-accent-yellow" /> Aggression</span>
-              <span className="text-cyan-400 font-mono text-xs">{(trainingBotSettings.aggressionFactor * 100).toFixed(0)}%</span>
-            </div>
-            <input type="range" min={0} max={100} value={trainingBotSettings.aggressionFactor * 100}
-              onChange={e => handleTrainingChange('aggressionFactor', parseInt(e.target.value) / 100)}
-              className="w-full h-1.5 bg-surface-border rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:bg-cyan-400 accent-cyan-400" />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-text-secondary flex items-center gap-1"><Shield size={12} className="text-accent-blue" /> Bluff Freq</span>
-              <span className="text-cyan-400 font-mono text-xs">{(trainingBotSettings.bluffFrequency * 100).toFixed(0)}%</span>
-            </div>
-            <input type="range" min={0} max={30} value={trainingBotSettings.bluffFrequency * 100}
-              onChange={e => handleTrainingChange('bluffFrequency', parseInt(e.target.value) / 100)}
-              className="w-full h-1.5 bg-surface-border rounded-full appearance-none cursor-pointer accent-cyan-400" />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-text-secondary flex items-center gap-1"><AlertTriangle size={12} className="text-accent-red" /> Mistake Rate</span>
-              <span className="text-cyan-400 font-mono text-xs">{(trainingBotSettings.mistakeRate * 100).toFixed(0)}%</span>
-            </div>
-            <input type="range" min={0} max={10} value={trainingBotSettings.mistakeRate * 100}
-              onChange={e => handleTrainingChange('mistakeRate', parseInt(e.target.value) / 100)}
-              className="w-full h-1.5 bg-surface-border rounded-full appearance-none cursor-pointer accent-cyan-400" />
-          </div>
+          <SliderControl
+            label="Aggression"
+            icon={<Zap size={12} className="text-accent-yellow" />}
+            value={trainingBotSettings.aggressionFactor * 100}
+            min={0} max={100}
+            onChange={v => handleTrainingChange('aggressionFactor', v / 100)}
+          />
+          <SliderControl
+            label="Bluff Freq"
+            icon={<Shield size={12} className="text-accent-blue" />}
+            value={trainingBotSettings.bluffFrequency * 100}
+            min={0} max={30}
+            onChange={v => handleTrainingChange('bluffFrequency', v / 100)}
+          />
+          <SliderControl
+            label="Mistake Rate"
+            icon={<AlertTriangle size={12} className="text-accent-red" />}
+            value={trainingBotSettings.mistakeRate * 100}
+            min={0} max={10}
+            onChange={v => handleTrainingChange('mistakeRate', v / 100)}
+          />
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-text-secondary">Min Reaction (s)</label>
+              <label className="text-xs text-text-secondary font-semibold block mb-1">Min Reaction (s)</label>
               <input type="number" min={0.1} max={5} step={0.1} value={trainingBotSettings.reactionTimeMin}
-                onChange={e => handleTrainingChange('reactionTimeMin', parseFloat(e.target.value))}
-                className="input-field mt-1 text-sm" />
+                onChange={e => handleTrainingChange('reactionTimeMin', parseFloat(e.target.value) || 0.5)}
+                className="input-field text-sm" />
             </div>
             <div>
-              <label className="text-xs text-text-secondary">Max Reaction (s)</label>
+              <label className="text-xs text-text-secondary font-semibold block mb-1">Max Reaction (s)</label>
               <input type="number" min={0.5} max={10} step={0.1} value={trainingBotSettings.reactionTimeMax}
-                onChange={e => handleTrainingChange('reactionTimeMax', parseFloat(e.target.value))}
-                className="input-field mt-1 text-sm" />
+                onChange={e => handleTrainingChange('reactionTimeMax', parseFloat(e.target.value) || 3)}
+                className="input-field text-sm" />
             </div>
           </div>
         </div>
@@ -195,7 +233,7 @@ const SettingsPanel: React.FC = () => {
           <div className="w-6 h-6 bg-gold rounded-full flex items-center justify-center">
             <Bot size={12} className="text-black" />
           </div>
-          <span className="font-bold">Opponent Bots</span>
+          <span className="font-bold text-sm">Opponent Bots</span>
           <span className="text-[10px] text-text-secondary">({numBots - 1} opponents)</span>
         </div>
         <p className="text-xs text-text-secondary mb-3">
@@ -203,16 +241,16 @@ const SettingsPanel: React.FC = () => {
         </p>
 
         <div className="mb-3">
-          <label className="text-xs text-text-secondary mb-1.5 block">Opponent Personality</label>
+          <label className="text-xs text-text-secondary mb-1.5 block font-semibold">Opponent Personality</label>
           <div className="grid grid-cols-2 gap-1.5">
             {personalities.map(p => (
               <button
                 key={p.value}
                 onClick={() => setOpponentPersonality(p.value)}
-                className={`p-2 rounded-lg border text-left transition-all ${
+                className={`p-2 rounded-xl border text-left transition-all ${
                   opponentPersonality === p.value
-                    ? 'border-gold bg-gold/10'
-                    : 'border-surface-border hover:border-surface-elevated'
+                    ? 'border-gold bg-gold/10 shadow-[0_0_12px_rgba(212,175,55,0.15)]'
+                    : 'border-surface-border hover:border-surface-elevated hover:bg-white/[0.03]'
                 }`}
               >
                 <div className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold text-white bg-gradient-to-r ${p.color} mb-0.5`}>
@@ -226,16 +264,16 @@ const SettingsPanel: React.FC = () => {
 
         {/* Opponent read-only stats */}
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="bg-surface rounded-lg p-2">
-            <div className="text-[10px] text-text-secondary">Aggression</div>
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+            <div className="text-[10px] text-text-secondary/50 mb-1 font-semibold">Aggression</div>
             <div className="text-gold font-mono text-sm font-bold">{(botSettings.aggressionFactor * 100).toFixed(0)}%</div>
           </div>
-          <div className="bg-surface rounded-lg p-2">
-            <div className="text-[10px] text-text-secondary">Bluff</div>
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+            <div className="text-[10px] text-text-secondary/50 mb-1 font-semibold">Bluff</div>
             <div className="text-gold font-mono text-sm font-bold">{(botSettings.bluffFrequency * 100).toFixed(0)}%</div>
           </div>
-          <div className="bg-surface rounded-lg p-2">
-            <div className="text-[10px] text-text-secondary">Mistakes</div>
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5">
+            <div className="text-[10px] text-text-secondary/50 mb-1 font-semibold">Mistakes</div>
             <div className="text-gold font-mono text-sm font-bold">{(botSettings.mistakeRate * 100).toFixed(0)}%</div>
           </div>
         </div>
@@ -243,7 +281,8 @@ const SettingsPanel: React.FC = () => {
       </div>
 
       {/* Reset */}
-      <button onClick={resetStats} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
+      <button onClick={resetStats}
+        className="btn-ghost w-full flex items-center justify-center gap-2 text-accent-red border-accent-red/30 hover:bg-accent-red/10 hover:text-accent-red hover:border-accent-red/50">
         <RefreshCw size={14} /> Reset All Statistics
       </button>
     </div>
