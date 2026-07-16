@@ -6,6 +6,7 @@ import SettingsPanel from './components/SettingsPanel';
 import Card from './components/Card';
 import CoachTips from './components/CoachTips';
 import ErrorBoundary from './components/ErrorBoundary';
+import TrainingBotSettings from './components/TrainingBotSettings';
 import { useGameStore } from './store/gameStore';
 import { initMonitoring, addBreadcrumb, reportWebVitals } from './utils/monitoring';
 import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle, Loader2 } from 'lucide-react';
@@ -25,7 +26,7 @@ const LazyFallback: React.FC = () => (
   </div>
 );
 
-type Tab = 'play' | 'stats' | 'rules' | 'about' | 'settings';
+type Tab = 'play' | 'stats' | 'rules' | 'about' | 'settings' | 'training';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('play');
