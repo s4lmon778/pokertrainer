@@ -67,8 +67,7 @@ export type SkillLevel = number; // 1-100
  * All parameters are independently adjustable to create
  * any desired playing style from beginner to solver-level.
  * 
- * TODO: Add persistence (save/load configs to JSON)
- * TODO: Add presets (GTO 100, Exploitative 75, etc.)
+ * @remarks Persists to localStorage via saveConfig/saveConfigToStorage/loadConfigFromStorage
  */
 export interface TrainingBotConfig {
   // ── Skill & Strategy ──
@@ -382,6 +381,57 @@ export const TRAINING_PRESETS: Record<string, Partial<TrainingBotConfig>> = {
     tiltThreshold: 2,
   },
 };
+
+// ═══════════════════════════════════════════════════════════
+// CONFIG PERSISTENCE
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Serialize TrainingBotConfig to JSON string.
+ * Used by localStorage persistence and future desktop app file I/O.
+ */
+export function saveConfig(config: TrainingBotConfig): string {
+  return JSON.stringify(config, null, 2);
+}
+
+/**
+ * Deserialize JSON string to TrainingBotConfig.
+ * Throws if JSON is invalid or missing required fields.
+ */
+export function loadConfig(json: string): TrainingBotConfig {
+  const parsed = JSON.parse(json);
+  const required = Object.keys(DEFAULT_TRAINING_CONFIG);
+  for (const key of required) {
+    if (!(key in parsed)) {
+      throw new Error(`Missing required config field: ${key}`);
+    }
+  }
+  return { ...DEFAULT_TRAINING_CONFIG, ...parsed };
+}
+
+/**
+ * Save config to localStorage under the 'trainingBotConfig' key.
+ */
+export function saveConfigToStorage(config: TrainingBotConfig): void {
+  try {
+    localStorage.setItem('trainingBotConfig', saveConfig(config));
+  } catch {
+    // localStorage unavailable (SSR, private mode) — silently fall back
+  }
+}
+
+/**
+ * Load config from localStorage. Returns DEFAULT if nothing saved.
+ */
+export function loadConfigFromStorage(): TrainingBotConfig {
+  try {
+    const stored = localStorage.getItem('trainingBotConfig');
+    if (!stored) return DEFAULT_TRAINING_CONFIG;
+    return loadConfig(stored);
+  } catch {
+    return DEFAULT_TRAINING_CONFIG;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // STRATEGY REGISTRY
