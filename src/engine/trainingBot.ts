@@ -434,6 +434,66 @@ export function loadConfigFromStorage(): TrainingBotConfig {
 }
 
 // ═══════════════════════════════════════════════════════════
+// EXTERNAL PRESET MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+
+const PRESET_STORAGE_KEY = 'trainingBotPresets';
+
+/**
+ * Save a custom preset to localStorage.
+ */
+export function savePreset(name: string, config: TrainingBotConfig): void {
+  try {
+    const presets = loadPresetMap();
+    presets[name] = config;
+    localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+/**
+ * Load a custom preset by name. Returns null if not found.
+ */
+export function loadPreset(name: string): TrainingBotConfig | null {
+  const presets = loadPresetMap();
+  return presets[name] ?? null;
+}
+
+/**
+ * List all saved custom preset names.
+ */
+export function listPresets(): string[] {
+  return Object.keys(loadPresetMap());
+}
+
+/**
+ * Delete a custom preset.
+ */
+export function deletePreset(name: string): void {
+  try {
+    const presets = loadPresetMap();
+    delete presets[name];
+    localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+/**
+ * Internal: load the preset map from localStorage.
+ */
+function loadPresetMap(): Record<string, TrainingBotConfig> {
+  try {
+    const stored = localStorage.getItem(PRESET_STORAGE_KEY);
+    if (!stored) return {};
+    return JSON.parse(stored);
+  } catch {
+    return {};
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // STRATEGY REGISTRY
 // ═══════════════════════════════════════════════════════════
 
