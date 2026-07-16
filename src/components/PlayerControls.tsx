@@ -17,6 +17,19 @@ const PlayerControls: React.FC = () => {
     setActionLog(prev => [msg, ...prev].slice(0, 3));
   }, []);
 
+  const humanPlayer = useMemo(() => gameState?.players.find(p => !p.isBot), [gameState]);
+
+  // Initialize raiseAmount when toCall changes (reset slider to min raise each round)
+  useEffect(() => {
+    if (!gameState || !humanPlayer) return;
+    const tc = gameState.currentBet - humanPlayer.bet;
+    if (tc > 0) {
+      setRaiseAmount(tc * 2);
+    } else {
+      setRaiseAmount(0);
+    }
+  }, [gameState?.currentBet, humanPlayer?.bet, gameState?.handNumber]);
+
   const actionWinRates = useMemo(() => {
     if (!gameState) return { fold: 0, checkCall: 0, raise: 0, allIn: 0 };
     const human = gameState.players.find(p => !p.isBot);
@@ -25,7 +38,6 @@ const PlayerControls: React.FC = () => {
     return computeActionWinRates(human, gameState.communityCards, gameState.currentPhase, gameState.currentBet, gameState.pot, opponents);
   }, [gameState]);
 
-  const humanPlayer = useMemo(() => gameState?.players.find(p => !p.isBot), [gameState]);
   const isMyTurn = useMemo(() => {
     if (!gameState || !humanPlayer) return false;
     return gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
@@ -175,8 +187,8 @@ const PlayerControls: React.FC = () => {
         {/* Raise button */}
         {canRaise && isMyTurn && (
           <button
-            onClick={() => doAction('raise', raiseAmount || toCall * 2, `Raised $${raiseAmount || toCall * 2}`)}
-            disabled={isActing}
+            onClick={() => doAction('raise', raiseAmount || toCall * 2, `Raised $${(raiseAmount || toCall * 2).toLocaleString()}`)}
+            disabled={!isMyTurn || isActing}
             className="btn-primary flex items-center gap-1.5"
           >
             {isActing ? <Loader2 size={15} className="animate-spin text-black" /> : <TrendingUp size={15} />}
@@ -189,7 +201,7 @@ const PlayerControls: React.FC = () => {
         {canRaise && isMyTurn && (
           <button
             onClick={() => doAction('raise', (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0), 'ALL IN!')}
-            disabled={isActing}
+            disabled={!isMyTurn || isActing}
             className="btn-allin flex items-center gap-1.5"
           >
             {isActing ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
@@ -200,40 +212,58 @@ const PlayerControls: React.FC = () => {
       </div>
 
       {/* Raise slider */}
-      {canRaise && isMyTurn && (
-        <div className="mt-2 w-[40%] min-w-[140px]">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold">Raise Amount</span>
-            <span className="text-gold font-mono font-bold text-xs">${raiseAmount || toCall * 2}</span>
+      {canRaise && isMyTurn && (() => {
+        const sliderMin = toCall * 2;
+        const sliderMax = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
+        const sliderStep = Math.max(5, gameState.minRaise);
+        const sliderValue = raiseAmount || sliderMin;
+
+        // Hide slider if min >= max (all-in only)
+        if (sliderMin >= sliderMax) return null;
+
+        return (
+          <div className="mt-2 w-full">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold">Raise Amount</span>
+              <span className="text-gold font-mono font-bold text-xs">${sliderValue.toLocaleString()}</span>
+            </div>
+            <input
+              type="range"
+              min={sliderMin}
+              max={sliderMax}
+              step={sliderStep}
+              value={sliderValue}
+              onInput={e => setRaiseAmount(parseInt((e.target as HTMLInputElement).value) || 0)}
+              onChange={e => setRaiseAmount(parseInt(e.target.value) || 0)}
+              className="slider-gold"
+              style={{ '--slider-pct': `${((sliderValue - sliderMin) / (sliderMax - sliderMin)) * 100}%` } as React.CSSProperties}
+            />
+            <div className="flex justify-between text-xs mt-0.5">
+              <span className="text-text-secondary/40 font-mono">Min: ${sliderMin.toLocaleString()}</span>
+              <span className="text-text-secondary/40 font-mono">Max: ${sliderMax.toLocaleString()}</span>
+            </div>
           </div>
-          <input
-            type="range"
-            min={toCall * 2}
-            max={(humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0)}
-            step={5}
-            value={raiseAmount || toCall * 2}
-            onChange={e => setRaiseAmount(parseInt(e.target.value) || 0)}
-            className="slider-gold"
-            style={{ '--slider-pct': `${((raiseAmount || toCall * 2) / ((humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0))) * 100}%` } as React.CSSProperties}
-          />
-          <div className="flex justify-between text-xs mt-0.5">
-            <span className="text-text-secondary/40 font-mono">Min: ${toCall * 2}</span>
-            <span className="text-text-secondary/40 font-mono">Max: ${(humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0)}</span>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Quick raise + Action log */}
       <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
         {canRaise && isMyTurn && (
           <div className="flex gap-1.5">
-            {[0.5, 1, 2, 3].map(mult => (
-              <button key={mult} onClick={() => setRaiseAmount(Math.min(toCall * 2 * mult, (humanPlayer?.chips ?? 0)))}
-                className="text-[11px] px-2.5 py-1 bg-white/5 rounded-lg border border-white/10 text-text-secondary/60 hover:border-gold/40 hover:text-gold transition-all font-mono font-bold active:scale-95">
-                {mult}x
-              </button>
-            ))}
-            <button onClick={() => setRaiseAmount(Math.min(gameState.pot + toCall, (humanPlayer?.chips ?? 0)))}
+            {[0.5, 1, 2, 3].map(mult => {
+              const minRaise = toCall * 2;
+              const chipTotal = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
+              return (
+                <button key={mult} onClick={() => setRaiseAmount(Math.min(minRaise * mult, chipTotal))}
+                  className="text-[11px] px-2.5 py-1 bg-white/5 rounded-lg border border-white/10 text-text-secondary/60 hover:border-gold/40 hover:text-gold transition-all font-mono font-bold active:scale-95">
+                  {mult}x
+                </button>
+              );
+            })}
+            <button onClick={() => {
+              const chipTotal = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
+              setRaiseAmount(Math.min(gameState.pot + toCall, chipTotal));
+            }}
               className="text-[11px] px-2.5 py-1 bg-white/5 rounded-lg border border-white/10 text-text-secondary/60 hover:border-gold/40 hover:text-gold transition-all font-mono font-bold active:scale-95">
               Pot
             </button>

@@ -100,37 +100,7 @@
 
   /* ── PREMIUM CARD COMPONENT ── */
 
-  .playing-card {
-    @apply relative rounded-xl select-none;
-    transform-style: preserve-3d;
-    perspective: 800px;
-  }
-
-  .playing-card-inner {
-    @apply relative w-full h-full transition-transform duration-500;
-    transform-style: preserve-3d;
-  }
-
-  .playing-card:hover .playing-card-inner {
-    transform: rotateY(10deg) scale(1.08);
-    z-index: 30;
-  }
-
-  .card-face {
-    @apply absolute inset-0 rounded-xl backface-hidden;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-  }
-
-  .card-back-face {
-    transform: rotateY(0deg);
-  }
-
-  .card-front-face {
-    transform: rotateY(180deg);
-  }
-
-  /* Card back pattern */
+  /* Card back pattern (used for face-down cards) */
   .card-back-design {
     background:
       repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.03) 3px, rgba(255,255,255,0.03) 6px),

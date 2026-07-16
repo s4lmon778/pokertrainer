@@ -23,11 +23,10 @@ interface CardDisplayProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   dealDelay?: number;
-  useFlip?: boolean;
 }
 
 const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
-  card, faceDown = false, size = 'md', className = '', dealDelay = 0, useFlip = false,
+  card, faceDown = false, size = 'md', className = '', dealDelay = 0,
 }) => {
   const sizeClasses = {
     sm: 'w-8 h-12 md:w-9 md:h-14 text-[9px] md:text-[10px]',
@@ -35,7 +34,6 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
     lg: 'w-14 h-20 md:w-16 md:h-24 text-xs md:text-sm',
   };
 
-  const animClass = useFlip ? 'animate-deal-flip' : 'animate-deal-stagger';
   const delayStyle = dealDelay > 0 ? { animationDelay: `${dealDelay}ms` } : {};
 
   const suitSymbol = SUIT_SYMBOLS[card.suit] || '';
@@ -44,20 +42,18 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
   if (faceDown) {
     return (
       <div
-        className={`${sizeClasses[size]} playing-card cursor-default ${className}`}
+        className={`${sizeClasses[size]} cursor-default animate-deal-stagger ${className}`}
         style={delayStyle}
       >
-        <div className={`playing-card-inner ${animClass}`}>
-          {/* Card back */}
-          <div className="card-face card-back-face card-back-design rounded-xl border-2 border-indigo-400/30 shadow-card-premium flex items-center justify-center overflow-hidden">
-            {/* Center diamond */}
-            <div className="w-7 h-7 md:w-8 md:h-8 rotate-45 border-2 border-indigo-300/25 rounded-sm flex items-center justify-center bg-indigo-800/30">
-              <div className="-rotate-45 text-indigo-300/50 text-base md:text-lg font-serif">♠</div>
-            </div>
-            {/* Corner accents */}
-            <div className="absolute top-1 left-1 text-indigo-300/20 text-[7px]">♠</div>
-            <div className="absolute bottom-1 right-1 text-indigo-300/20 text-[7px] rotate-180">♠</div>
+        {/* Card back — flat, no 3D flip */}
+        <div className="w-full h-full card-back-design rounded-xl border-2 border-indigo-400/30 shadow-card-premium flex items-center justify-center overflow-hidden relative">
+          {/* Center diamond */}
+          <div className="w-7 h-7 md:w-8 md:h-8 rotate-45 border-2 border-indigo-300/25 rounded-sm flex items-center justify-center bg-indigo-800/30">
+            <div className="-rotate-45 text-indigo-300/50 text-base md:text-lg font-serif">♠</div>
           </div>
+          {/* Corner accents */}
+          <div className="absolute top-1 left-1 text-indigo-300/20 text-[7px]">♠</div>
+          <div className="absolute bottom-1 right-1 text-indigo-300/20 text-[7px] rotate-180">♠</div>
         </div>
       </div>
     );
@@ -65,33 +61,30 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
 
   return (
     <div
-      className={`${sizeClasses[size]} playing-card cursor-default ${className}`}
+      className={`${sizeClasses[size]} cursor-default animate-deal-stagger ${className}`}
       style={delayStyle}
     >
-      <div className={`playing-card-inner ${animClass}`}>
-        {/* Card front */}
-        <div className="card-face card-front-face bg-white rounded-xl border border-gray-200/70 shadow-card-premium flex flex-col items-center justify-between p-[3px] md:p-1"
-          style={{ transform: 'rotateY(180deg)' }}>
-          {/* Top-left rank+suit */}
-          <div className="self-start font-bold leading-tight" style={{ color: suitColor }}>
-            {card.rank}
-            <span className="text-[0.5em] ml-[1px] align-super">{suitSymbol}</span>
-          </div>
-          {/* Center pip — big suit */}
-          <div className="text-lg md:text-xl leading-none" style={{ color: suitColor }}>
-            {suitSymbol}
-          </div>
-          {/* Bottom-right rank+suit (upside down) */}
-          <div className="self-end font-bold leading-tight rotate-180" style={{ color: suitColor }}>
-            {card.rank}
-            <span className="text-[0.5em] ml-[1px] align-super">{suitSymbol}</span>
-          </div>
-          {/* Inner highlight */}
-          <div className="absolute inset-0 rounded-xl pointer-events-none"
-            style={{
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(0,0,0,0.05) 100%)',
-            }} />
+      {/* Card front — flat, no 3D flip */}
+      <div className="w-full h-full bg-white rounded-xl border border-gray-200/70 shadow-card-premium flex flex-col items-center justify-between p-[3px] md:p-1 relative overflow-hidden">
+        {/* Top-left rank+suit */}
+        <div className="self-start font-bold leading-tight" style={{ color: suitColor }}>
+          {card.rank}
+          <span className="text-[0.5em] ml-[1px] align-super">{suitSymbol}</span>
         </div>
+        {/* Center pip — big suit */}
+        <div className="text-lg md:text-xl leading-none" style={{ color: suitColor }}>
+          {suitSymbol}
+        </div>
+        {/* Bottom-right rank+suit (upside down) */}
+        <div className="self-end font-bold leading-tight rotate-180" style={{ color: suitColor }}>
+          {card.rank}
+          <span className="text-[0.5em] ml-[1px] align-super">{suitSymbol}</span>
+        </div>
+        {/* Inner highlight */}
+        <div className="absolute inset-0 rounded-xl pointer-events-none"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(0,0,0,0.05) 100%)',
+          }} />
       </div>
     </div>
   );
@@ -177,7 +170,7 @@ const PotDisplay: React.FC<{
         <div key={i}
           className="bg-black/30 backdrop-blur-md rounded-full px-3 py-0.5 border border-amber-500/20 animate-fade-in"
           style={{ animationDelay: `${(i + 1) * 100}ms` }}>
-          <span className="text-amber-400/80 font-bold text-[10px]">Side ${sp.amount}</span>
+          <span className="text-amber-400/80 font-bold text-[10px]">Side ${sp.amount.toLocaleString()}</span>
         </div>
       ))}
     </div>
@@ -251,7 +244,7 @@ const WinnerOverlay: React.FC<{
     })), []);
 
   return (
-    <div className="absolute top-[14%] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+    <div className="absolute top-[35%] left-1/2 -translate-x-1/2 z-50 pointer-events-none">
       {/* Center confetti fall */}
       {particles.map(p => (
         <div key={p.id}
@@ -369,7 +362,7 @@ const PlayerBadge: React.FC<{
       {showCards && hand.length > 0 && (
         <div className="flex gap-0.5 mb-1 relative z-10">
           {hand.map((card, i) => (
-            <CardDisplay key={card.id} card={card} size="md" dealDelay={i * 80} useFlip={i === 1} />
+            <CardDisplay key={card.id} card={card} size="md" dealDelay={i * 80} />
           ))}
         </div>
       )}
@@ -553,14 +546,6 @@ const PokerTable: React.FC = React.memo(() => {
     [gameState.communityCards.length, handKey]
   );
 
-  // Determine community card mode — flip for new cards this phase
-  const getCommunityCardMode = (index: number) => {
-    if (gameState.currentPhase === 'flop' && index < 3) return true;
-    if (gameState.currentPhase === 'turn' && index === 3) return true;
-    if (gameState.currentPhase === 'river' && index === 4) return true;
-    return false;
-  };
-
   return (
     <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)' }}>
       {/* ── Table ── */}
@@ -586,7 +571,7 @@ const PokerTable: React.FC = React.memo(() => {
         {/* Felt shine / light reflection */}
         <div className="absolute inset-3 rounded-[38%] bg-felt-shine" />
 
-        {/* ── Community cards with staggered flip animation ── */}
+        {/* ── Community cards with staggered deal animation ── */}
         <div className="absolute top-[44%] left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
           {gameState.communityCards.map((card, i) => (
             <CardDisplay
@@ -594,7 +579,6 @@ const PokerTable: React.FC = React.memo(() => {
               card={card}
               size="md"
               dealDelay={communityDelays[i] || 0}
-              useFlip={getCommunityCardMode(i)}
             />
           ))}
           {Array.from({ length: 5 - gameState.communityCards.length }).map((_, i) => (
