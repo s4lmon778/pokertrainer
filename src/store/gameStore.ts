@@ -4,6 +4,16 @@ import type { GameState, Player, GamePhase, Card as CardType, SidePot } from '..
 import { createDeck, shuffleDeck } from '../utils/deck';
 import { evaluateHand } from '../utils/handEvaluator';
 import { botDecision, type BotSettings, createBotSettings, createOpponentSettings, type BotPersonality } from '../utils/botEngine';
+import { calculateSidePots } from '../utils/sidePot';
+
+/**
+ * TODO: Future Training Bot integration points:
+ * - Add `trainingMetrics` to track per-hand EV, decision accuracy, and bluff success rate
+ * - Store hand snapshots for post-session replay and analysis
+ * - Add bot self-assessment: compare bot decisions vs GTO baseline per street
+ * - Track bot learning progress: does decision quality improve over sessions?
+ * - Add configurable bot "coaching" mode with real-time decision feedback
+ */
 
 interface GameHistoryEntry {
   handNumber: number;
@@ -684,80 +694,14 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
-        // Compute side pots
-        // Include ALL players who contributed to the pot (including folded — their money is dead but still in the pot)
-        const allContributors = gs.players.filter(p => p.totalHandBet > 0);
-        const nonFolded = allContributors.filter(p => !p.folded);
-        const sortedByBet = [...allContributors].sort((a, b) => a.totalHandBet - b.totalHandBet);
-
-        const pots: { amount: number; eligiblePlayers: Player[] }[] = [];
-        let prevAmount = 0;
-        for (const p of sortedByBet) {
-          const contribution = p.totalHandBet - prevAmount;
-          if (contribution > 0) {
-            // ALL players who contributed at least this much (including folded — their money is in the pot)
-            const allAtLevel = allContributors.filter(pl => pl.totalHandBet >= p.totalHandBet);
-            // Only non-folded players are eligible to win
-            const eligible = nonFolded.filter(pl => pl.totalHandBet >= p.totalHandBet);
-            pots.push({ amount: contribution * allAtLevel.length, eligiblePlayers: eligible });
-          }
-          prevAmount = p.totalHandBet;
-        }
-
-        // Evaluate each pot
-        const distributions: Record<string, number> = {};
-        const allWinners: { playerId: string; amount: number }[] = [];
-        const potDescriptions: string[] = [];
-
-        for (const pot of pots) {
-          const evals = pot.eligiblePlayers.map(p => ({
-            player: p,
-            ...evaluateHand(p.hand, gs.communityCards),
-          }));
-          evals.sort((a, b) => b.score - a.score);
-          const bestScore = evals[0].score;
-          const potWinners = evals.filter(e => e.score === bestScore);
-          const share = Math.floor(pot.amount / potWinners.length);
-
-          for (const w of potWinners) {
-            distributions[w.player.id] = (distributions[w.player.id] || 0) + share;
-          }
-          // Remainder chips go to first winner
-          const remainder = pot.amount - share * potWinners.length;
-          if (remainder > 0 && potWinners.length > 0) {
-            distributions[potWinners[0].player.id] += remainder;
-          }
-
-          if (potWinners.length > 0) {
-            const wName = potWinners[0].player.id === 'human' ? 'You' : potWinners[0].player.name;
-            if (potWinners.length > 1) {
-              potDescriptions.push(`Split pot (${potWinners.length} ways): ${wName} + others`);
-            } else {
-              potDescriptions.push(`${wName}: ${potWinners[0].description}`);
-            }
-          }
-        }
+        // Compute side pots using extracted pure function
+        const sidePotResult = calculateSidePots(gs.players, gs.communityCards);
+        const { distribution: distributions, winners: allWinners, sidePots, potDescriptions, primaryWinnerId } = sidePotResult;
 
         // Pick primary winner for display
-        const primaryWinnerId = nonFolded.reduce((best, p) => {
-          const bestAmount = distributions[best] || 0;
-          const pAmount = distributions[p.id] || 0;
-          return pAmount > bestAmount ? p.id : best;
-        }, nonFolded[0].id);
         const primaryPlayer = gs.players.find(p => p.id === primaryWinnerId)!;
         const primaryDisplay = primaryPlayer.id === 'human' ? 'You' : primaryPlayer.name;
         const primaryEval = evaluateHand(primaryPlayer.hand, gs.communityCards);
-
-        // Build winner entries
-        for (const [pid, amt] of Object.entries(distributions)) {
-          if (amt > 0) allWinners.push({ playerId: pid, amount: amt });
-        }
-
-        // Build side pot display
-        const sidePots: SidePot[] = pots.map(pot => ({
-          amount: pot.amount,
-          eligiblePlayerIds: pot.eligiblePlayers.map(p => p.id),
-        }));
 
         set({
           gameState: {

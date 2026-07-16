@@ -223,6 +223,112 @@ function positionMultiplier(position: number, numPlayers: number): number {
   return 0.80; // Early position = tight
 }
 
+/**
+ * Calculate a realistic bet size based on street, position, hand strength,
+ * opponent count, and stack depth.
+ *
+ * Sizing principles (heuristic, not GTO):
+ * - Preflop: larger relative to pot (3–5x BB standard open)
+ * - Postflop: 50–75% pot is standard; adjust by strength & opponents
+ * - Late position: can bet slightly smaller (more steals, wider range)
+ * - More opponents → larger sizing for protection
+ * - Stronger hands → larger sizing for value extraction
+ * - Deep stacks → smaller relative sizing (more playability)
+ * - Shallow stacks → larger relative sizing (leverage fold equity)
+ *
+ * @param params.street - Current betting street
+ * @param params.pot - Current pot size
+ * @param params.playerChips - Betting player's remaining chips
+ * @param params.currentBet - Current bet to match
+ * @param params.handStrength - Normalized hand strength 0–1
+ * @param params.positionNormalized - Position 0 (early) to 1 (late)
+ * @param params.opponentCount - Number of active opponents
+ * @param params.aggression - Bot aggression factor 0–1
+ * @returns The total bet amount (what the player's bet should be after raising)
+ *
+ * TODO: Replace with GTO-derived sizing tables per board texture.
+ * TODO: Integrate range-vs-range equity for polarized sizing on later streets.
+ * TODO: Add blocker-aware sizing (e.g. larger when holding nut-blockers).
+ */
+function calculateBetSize(params: {
+  street: string;
+  pot: number;
+  playerChips: number;
+  currentBet: number;
+  handStrength: number;
+  positionNormalized: number;
+  opponentCount: number;
+  aggression: number;
+}): number {
+  const { street, pot, playerChips, currentBet, handStrength, positionNormalized, opponentCount, aggression } = params;
+
+  // Base sizing as fraction of pot
+  let potFraction: number;
+
+  if (street === 'preflop') {
+    // Preflop: sizing in terms of the big blind equivalent
+    // Standard open is 2.5–4x the current bet (typically the BB)
+    // Stronger hands open larger; late position can open smaller
+    const baseMultiplier = 2.5 + aggression * 1.5; // 2.5–4.0x
+    const strengthBonus = handStrength > 0.7 ? 0.5 : handStrength > 0.5 ? 0.25 : 0;
+    const positionDiscount = positionNormalized > 0.6 ? -0.25 : 0; // LP can open smaller
+    const multiplier = baseMultiplier + strengthBonus + positionDiscount;
+    const openSize = currentBet * multiplier;
+
+    // With more opponents behind, open larger to discourage calls
+    const opponentBonus = Math.max(0, (opponentCount - 1) * currentBet * 0.5);
+
+    return Math.min(currentBet + openSize + opponentBonus, playerChips);
+  }
+
+  // Postflop: fraction of pot
+  // Standard: 50–75% pot
+  if (handStrength > 0.80) {
+    // Value: 65–90% pot depending on wetness (simplified)
+    potFraction = 0.65 + aggression * 0.25;
+  } else if (handStrength > 0.60) {
+    // Solid: 50–70% pot
+    potFraction = 0.50 + aggression * 0.20;
+  } else if (handStrength > 0.40) {
+    // Marginal/bluff: 40–60% pot
+    potFraction = 0.40 + aggression * 0.20;
+  } else {
+    // Weak (continuation bet): 33–50% pot
+    potFraction = 0.33 + aggression * 0.17;
+  }
+
+  // Position adjustment: late position can use smaller sizing
+  if (positionNormalized > 0.7) {
+    potFraction *= 0.85; // 15% smaller from late position (wider range)
+  } else if (positionNormalized < 0.3) {
+    potFraction *= 1.10; // 10% larger from early position (narrower, stronger range)
+  }
+
+  // Opponent count: more opponents → bet larger for protection
+  if (opponentCount >= 3) {
+    potFraction *= 1.20; // 20% larger vs 3+ opponents
+  } else if (opponentCount === 2) {
+    potFraction *= 1.08; // 8% larger vs 2 opponents
+  }
+
+  // Stack depth adjustment (SPR proxy)
+  const spr = pot > 0 ? playerChips / pot : 20;
+  if (spr < 2) {
+    // Very shallow: bet sizes trend toward all-in
+    potFraction = Math.max(potFraction, 0.75);
+  } else if (spr > 10) {
+    // Very deep: slightly smaller sizing for pot control
+    potFraction *= 0.90;
+  }
+
+  // On later streets, sizing typically increases
+  if (street === 'turn') potFraction *= 1.10;
+  if (street === 'river') potFraction *= 1.25;
+
+  const raiseAmount = Math.min(pot * potFraction, playerChips);
+  return currentBet + Math.max(raiseAmount, currentBet * 1.5); // ensure raise is meaningful
+}
+
 // --- Main bot decision engine ---
 export function botDecision(
   state: GameState,
@@ -231,7 +337,8 @@ export function botDecision(
 ): BotDecision {
   const { hand: holeCards, bet: playerBet, chips: playerChips } = player;
   const { currentBet, pot, currentPhase, players, communityCards } = state;
-  const numPlayers = players.filter(p => !p.folded).length;
+  const activePlayers = players.filter(p => !p.folded && p.chips > 0);
+  const numActiveOpponents = activePlayers.filter(p => p.id !== player.id).length;
   const effectiveBet = currentBet - playerBet;
 
   // All-in — can't act
@@ -290,6 +397,9 @@ export function botDecision(
   // --- Stack-to-pot ratio ---
   const spr = pot > 0 ? playerChips / pot : 20;
 
+  // Computed position normalized 0-1 for sizing calculations
+  const positionNormalized = players.length > 1 ? player.position / (players.length - 1) : 0.5;
+
   // --- Reaction time ---
   const baseTime = settings.reactionTimeMin + Math.random() * (settings.reactionTimeMax - settings.reactionTimeMin);
   const complexity = currentPhase === 'preflop' ? 0.3
@@ -298,6 +408,20 @@ export function botDecision(
     : 0.1;
   const tankTime = (finalEquity < 0.3 || finalEquity > 0.8) ? 0.4 : 0;
   const reactionTime = baseTime + complexity + tankTime;
+
+  // --- Compute bet size using the realistic sizing function ---
+  const getRaiseAmount = (strengthBonus = 0): number => {
+    return calculateBetSize({
+      street: currentPhase,
+      pot,
+      playerChips,
+      currentBet,
+      handStrength: finalEquity + strengthBonus,
+      positionNormalized,
+      opponentCount: numActiveOpponents,
+      aggression: settings.aggressionFactor,
+    });
+  };
 
   // --- Decision ---
   let action: BotDecision['action'];
@@ -313,30 +437,25 @@ export function botDecision(
   if (shouldBluff) {
     // Pure bluff
     action = 'raise';
-    const potSized = Math.min(pot, playerChips);
-    amount = currentBet + Math.max(potSized, currentBet * 2);
+    amount = getRaiseAmount(-0.10); // size bluff slightly smaller
     isBluff = true;
-    reasoning = `Bluffing — representing strength on ${currentPhase}`;
+    reasoning = `Bluffing — representing strength on ${currentPhase} (vs ${numActiveOpponents} opponent${numActiveOpponents !== 1 ? 's' : ''})`;
   } else if (semiBluff && !isRiver) {
     // Semi-bluff with draws
     action = 'raise';
-    amount = currentBet + Math.min(pot * 0.75, playerChips);
+    amount = getRaiseAmount(-0.05); // semi-bluff: moderate sizing
     isBluff = true;
     reasoning = `Semi-bluff — draw potential, fold equity`;
   } else if (finalEquity > 0.80) {
     // Very strong hand — value bet or trap
     if (Math.random() < settings.aggressionFactor * 1.2) {
       action = 'raise';
-      // Size bet based on SPR and hand strength
       if (spr < 2) {
         amount = playerChips; // Shallow stack: shove
         reasoning = `Monster hand (${handEval.description}), low SPR — shoving`;
-      } else if (spr < 5) {
-        amount = currentBet + Math.min(pot * 0.8, playerChips);
-        reasoning = `Strong hand (${handEval.description}), betting for value`;
       } else {
-        amount = currentBet + Math.min(pot * 0.65, playerChips);
-        reasoning = `Strong hand (${handEval.description}), deep stack value bet`;
+        amount = getRaiseAmount(0.10); // size up with strong hands
+        reasoning = `Strong hand (${handEval.description}), betting for value (${numActiveOpponents} opponent${numActiveOpponents !== 1 ? 's' : ''})`;
       }
     } else {
       // Occasionally slow-play
@@ -347,14 +466,14 @@ export function botDecision(
     // Good hand
     if (Math.random() < settings.aggressionFactor) {
       action = 'raise';
-      amount = currentBet + Math.min(pot * 0.5, playerChips);
+      amount = getRaiseAmount(0.05);
       reasoning = `Solid hand (${handEval.description}), applying pressure`;
     } else if (effectiveBet > 0 && finalEquity > potOdds) {
       action = 'call';
       reasoning = `Good hand, pot odds justify call (${(potOdds * 100).toFixed(0)}% needed, ${(finalEquity * 100).toFixed(0)}% equity)`;
     } else if (effectiveBet === 0) {
       action = Math.random() < settings.aggressionFactor ? 'raise' : 'check';
-      if (action === 'raise') amount = currentBet + Math.min(pot * 0.4, playerChips);
+      if (action === 'raise') amount = getRaiseAmount(0.0);
       reasoning = `Good hand, ${action === 'raise' ? 'betting' : 'checking'} for pot control`;
     } else {
       action = 'call';
@@ -366,7 +485,7 @@ export function botDecision(
       // No bet to face
       if (Math.random() < settings.aggressionFactor * 0.6) {
         action = 'raise';
-        amount = currentBet + Math.min(pot * 0.33, playerChips);
+        amount = getRaiseAmount(-0.05); // c-bet: standard sizing
         reasoning = `Marginal hand, c-bet as aggressor`;
       } else {
         action = 'check';

@@ -23,10 +23,11 @@ interface CardDisplayProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   dealDelay?: number;
+  flipIn?: boolean;
 }
 
 const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
-  card, faceDown = false, size = 'md', className = '', dealDelay = 0,
+  card, faceDown = false, size = 'md', className = '', dealDelay = 0, flipIn = false,
 }) => {
   const sizeClasses = {
     sm: 'w-8 h-12 md:w-9 md:h-14 text-[9px] md:text-[10px]',
@@ -34,6 +35,7 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
     lg: 'w-14 h-20 md:w-16 md:h-24 text-xs md:text-sm',
   };
 
+  const animClass = flipIn ? 'animate-deal-flip' : 'animate-deal-stagger';
   const delayStyle = dealDelay > 0 ? { animationDelay: `${dealDelay}ms` } : {};
 
   const suitSymbol = SUIT_SYMBOLS[card.suit] || '';
@@ -42,7 +44,7 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
   if (faceDown) {
     return (
       <div
-        className={`${sizeClasses[size]} cursor-default animate-deal-stagger ${className}`}
+        className={`${sizeClasses[size]} cursor-default ${animClass} ${className}`}
         style={delayStyle}
       >
         {/* Card back — flat, no 3D flip */}
@@ -61,7 +63,7 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
 
   return (
     <div
-      className={`${sizeClasses[size]} cursor-default animate-deal-stagger ${className}`}
+      className={`${sizeClasses[size]} cursor-default ${animClass} ${className}`}
       style={delayStyle}
     >
       {/* Card front — flat, no 3D flip */}
@@ -332,9 +334,10 @@ const PlayerBadge: React.FC<{
   hand: CardType[];
   showCards: boolean;
   lastAction?: string;
+  dealOffset?: number;
 }> = React.memo(({
   playerName, chips, bet, folded, isAllIn, isActive, isWinner,
-  isTrainingBot, isHuman, roleBadge, acted, hand, showCards, lastAction,
+  isTrainingBot, isHuman, roleBadge, acted, hand, showCards, lastAction, dealOffset = 0,
 }) => {
   // Determine active indicator style
   const activeRing = isActive
@@ -586,6 +589,7 @@ const PokerTable: React.FC = React.memo(() => {
               card={card}
               size="lg"
               dealDelay={communityDelays[i] || 0}
+              flipIn
             />
           ))}
           {Array.from({ length: 5 - gameState.communityCards.length }).map((_, i) => (
