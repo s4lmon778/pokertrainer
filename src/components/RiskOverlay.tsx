@@ -5,7 +5,7 @@ import { evaluateHand } from '../utils/handEvaluator';
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts';
 import { Percent, Target, TrendingUp, Shield } from 'lucide-react';
 
-const RiskOverlay: React.FC = () => {
+const RiskOverlay: React.FC = React.memo(() => {
   const gameState = useGameStore(s => s.gameState);
   const showRiskOverlay = useGameStore(s => s.showRiskOverlay);
 
@@ -125,6 +125,8 @@ const RiskOverlay: React.FC = () => {
       </div>
     </div>
   );
-};
+});
+
+RiskOverlay.displayName = 'RiskOverlay';
 
 export default RiskOverlay;

@@ -82,7 +82,7 @@ const App: React.FC = () => {
         pendingRef.current.playerIdx = currentIdx;
         // Use 0ms timeout for near-sync advance, prevents timer/cleanup races
         const skipTimer = setTimeout(() => {
-          try { advanceTurn(); } catch (e) { console.error('skip error:', e); }
+          try { advanceTurn(); } catch (e) { }
           pendingRef.current.playerIdx = -1;
         }, 0);
         pendingRef.current.actionTimer = skipTimer;
@@ -103,14 +103,14 @@ const App: React.FC = () => {
     // Safety: force-advance if stuck for 6 seconds
     const safety = setTimeout(() => {
       console.warn('bot safety timeout — forcing advance for player', currentIdx);
-      try { advanceTurn(); } catch (e) { console.error('safety error:', e); }
+      try { advanceTurn(); } catch (e) { }
       clearPending();
     }, 6000);
     pendingRef.current.safetyTimer = safety;
 
     const action = setTimeout(async () => {
       try { await botAct(); advanceTurn(); }
-      catch (e) { console.error('botAct error:', e); advanceTurn(); }
+      catch (e) { advanceTurn(); }
       finally { clearPending(); }
     }, autoPlaySpeed);
     pendingRef.current.actionTimer = action;
@@ -158,14 +158,14 @@ const App: React.FC = () => {
         stuckSinceRef.current = Date.now();
         const store = useGameStore.getState();
         const idxBefore = store.gameState?.currentPlayerIndex;
-        try { store.advanceTurn(); } catch (e) { console.error('stuck recovery error:', e); }
+        try { store.advanceTurn(); } catch (e) { }
         const newGs = useGameStore.getState().gameState;
         if (newGs && newGs.currentPlayerIndex === idxBefore && !newGs.gameOver) {
           console.warn('stuck detector: advanceTurn had no effect, forcing resolveHand');
           try {
             const s = useGameStore.getState();
             if (s.gameState) { s.resolveHand(); }
-          } catch (e) { console.error('force resolve error:', e); }
+          } catch (e) { }
         }
         lastKnownIdx = useGameStore.getState().gameState?.currentPlayerIndex;
       }
@@ -224,22 +224,25 @@ const App: React.FC = () => {
 
             {isPlaying && (
               <button onClick={quitGame}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary/60 hover:text-accent-red hover:bg-accent-red/10 border border-transparent hover:border-accent-red/20 transition-all">
-                <LogOut size={12} /> Quit
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary/60 hover:text-accent-red hover:bg-accent-red/10 border border-transparent hover:border-accent-red/20 transition-all"
+                aria-label="Quit game">
+                <LogOut size={12} aria-hidden="true" /> Quit
               </button>
             )}
           </div>
 
           {/* Tab Navigation */}
-          <nav className="flex gap-0.5 bg-white/5 rounded-xl p-0.5 sm:p-1 border border-white/5 overflow-x-auto scrollbar-none">
+          <nav className="flex gap-0.5 bg-white/5 rounded-xl p-0.5 sm:p-1 border border-white/5 overflow-x-auto scrollbar-none" role="tablist" aria-label="Main navigation">
             {tabs.map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                role="tab" aria-selected={activeTab === tab.id}
+                aria-label={`${tab.label} tab`}
                 className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-gold text-black shadow-md'
                     : 'text-text-secondary/70 hover:text-text-primary hover:bg-white/5'
                 }`}>
-                <tab.icon size={12} className="sm:w-[14px] sm:h-[14px]" />
+                <tab.icon size={12} className="sm:w-[14px] sm:h-[14px]" aria-hidden="true" />
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
@@ -248,10 +251,10 @@ const App: React.FC = () => {
       </header>
 
       {/* Main */}
-      <main className="flex-1 max-w-[1600px] mx-auto px-2 py-2 w-full">
+      <main className="flex-1 max-w-[1600px] mx-auto px-2 py-2 w-full" role="main">
         {/* Game Status Bar */}
         {showGame && (
-          <div className="glass px-3 sm:px-5 py-2 sm:py-2.5 mb-2 sm:mb-3 flex items-center justify-between flex-wrap gap-2 sm:gap-3 animate-fade-in">
+          <div className="glass px-3 sm:px-5 py-2 sm:py-2.5 mb-2 sm:mb-3 flex items-center justify-between flex-wrap gap-2 sm:gap-3 animate-fade-in" role="region" aria-label="Game status" aria-live="polite">
             <div className="flex items-center gap-2 sm:gap-5 text-xs sm:text-sm flex-wrap">
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="text-text-secondary/60 text-[10px] sm:text-xs uppercase tracking-wider font-semibold hidden sm:inline">Hand</span>
@@ -271,11 +274,12 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
               <button
                 onClick={toggleAutoPlayMode}
+                aria-label={autoPlayMode ? 'Disable auto-play mode' : 'Enable auto-play mode'}
                 className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
                   autoPlayMode ? 'bg-cyan-500 text-white' : 'bg-white/10 text-text-secondary/50 hover:text-text-primary'
                 }`}
               >
-                <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${autoPlayMode ? 'bg-white animate-pulse' : 'bg-text-secondary/30'}`} />
+                <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${autoPlayMode ? 'bg-white animate-pulse' : 'bg-text-secondary/30'}`} aria-hidden="true" />
                 AUTO
               </button>
               <div className="flex items-center gap-1">
@@ -289,6 +293,7 @@ const App: React.FC = () => {
                 />
                 <button
                   onClick={handleRebuy}
+                  aria-label={`Add $${rebuyAmount === '' ? 0 : rebuyAmount} in chips`}
                   className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg bg-gold/20 border border-gold/30 text-gold text-[9px] sm:text-[10px] font-bold hover:bg-gold/30 transition-all active:scale-95"
                 >
                   +$
@@ -303,8 +308,8 @@ const App: React.FC = () => {
                 </span>
               </div>
               {gameState!.gameOver && (
-                <button onClick={handleNextHand} className="btn-primary text-[10px] sm:text-xs px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-1.5">
-                  <Play size={12} /> Next Hand
+                <button onClick={handleNextHand} aria-label="Deal next hand" className="btn-primary text-[10px] sm:text-xs px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-1 sm:gap-1.5">
+                  <Play size={12} aria-hidden="true" /> Next Hand
                 </button>
               )}
             </div>
@@ -313,7 +318,7 @@ const App: React.FC = () => {
 
         {/* T-Bot decision status */}
         {showGame && tbotActivity && (
-          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 mb-1 sm:mb-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-[10px] sm:text-xs animate-fade-in overflow-x-auto">
+          <div role="status" aria-live="polite" className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 mb-1 sm:mb-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-[10px] sm:text-xs animate-fade-in overflow-x-auto">
             <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse shrink-0" />
             <span className="text-cyan-400 font-bold shrink-0">T-Bot</span>
             <span className={`px-1 sm:px-1.5 py-0.5 rounded font-black text-[8px] sm:text-[10px] uppercase tracking-wider shrink-0 ${
@@ -336,7 +341,9 @@ const App: React.FC = () => {
 
         {/* Landing page */}
         {activeTab === 'play' && !isPlaying && !gameState && (
-          <LandingPage onStart={handleStartGame} goToTab={goToTab} />
+          <section role="region" aria-label="Welcome">
+            <LandingPage onStart={handleStartGame} goToTab={goToTab} />
+          </section>
         )}
 
         {/* Game view — sidebar layout */}
@@ -352,10 +359,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'stats' && <StatsDashboard />}
-        {activeTab === 'rules' && <RulesPage />}
-        {activeTab === 'about' && <AboutPage />}
-        {activeTab === 'settings' && <SettingsPanel />}
+        {activeTab === 'stats' && <section role="region" aria-label="Statistics dashboard"><StatsDashboard /></section>}
+        {activeTab === 'rules' && <section role="region" aria-label="Poker rules and hand rankings"><RulesPage /></section>}
+        {activeTab === 'about' && <section role="region" aria-label="About PokerTrainer"><AboutPage /></section>}
+        {activeTab === 'settings' && <section role="region" aria-label="Game settings"><SettingsPanel /></section>}
       </main>
 
       <footer className="border-t border-white/5 py-3 text-center">
@@ -367,7 +374,7 @@ const App: React.FC = () => {
 
 // --- Landing Page ---
 
-const LandingPage: React.FC<{ onStart: () => void; goToTab: (tab: Tab) => void }> = ({ onStart, goToTab }) => (
+const LandingPage: React.FC<{ onStart: () => void; goToTab: (tab: Tab) => void }> = React.memo(({ onStart, goToTab }) => (
   <div className="flex flex-col items-center justify-center py-10 md:py-14 space-y-10 animate-fade-in">
     {/* Hero */}
     <div className="text-center max-w-lg space-y-5">
@@ -433,7 +440,9 @@ const LandingPage: React.FC<{ onStart: () => void; goToTab: (tab: Tab) => void }
       </div>
     </div>
   </div>
-);
+));
+
+LandingPage.displayName = 'LandingPage';
 
 // --- Rules Page ---
 
@@ -455,7 +464,7 @@ const colorizeSuits = (text: string) => {
   });
 };
 
-const RulesPage: React.FC = () => {
+const RulesPage: React.FC = React.memo(() => {
   const handRankings = [
     { rank: 1, name: 'Royal Flush', desc: 'A, K, Q, J, 10, all same suit', example: 'A♠ K♠ Q♠ J♠ 10♠', pct: '0.000154%', color: 'from-yellow-400 to-yellow-600' },
     { rank: 2, name: 'Straight Flush', desc: 'Five consecutive, same suit', example: '9♥ 8♥ 7♥ 6♥ 5♥', pct: '0.00139%', color: 'from-orange-400 to-orange-600' },
@@ -542,11 +551,13 @@ const RulesPage: React.FC = () => {
       </div>
     </div>
   );
-};
+});
+
+RulesPage.displayName = 'RulesPage';
 
 // --- About Page ---
 
-const AboutPage: React.FC = () => (
+const AboutPage: React.FC = React.memo(() => (
   <div className="space-y-5 animate-fade-in">
     <div className="card-premium">
       <div className="flex items-center gap-4 mb-4">
@@ -595,7 +606,9 @@ const AboutPage: React.FC = () => (
       </div>
     </div>
   </div>
-);
+));
+
+AboutPage.displayName = 'AboutPage';
 
 // --- Preflop Starting Hands Matrix ---
 
@@ -676,9 +689,11 @@ const MatrixCell: React.FC<{
   isSuited: boolean;
   r1: string;
   r2: string;
-}> = ({ label, pct, i, j, isPair, isSuited, r1, r2 }) => {
+  hiRank: string;
+  loRank: string;
+}> = ({ label, pct, isPair, isSuited, r1, r2, hiRank, loRank }) => {
   const c = getCellColor(pct);
-  const handName = isPair ? `${r1}${r2}` : isSuited ? `${r2}${r1}s` : `${r1}${r2}o`;
+  const handName = isPair ? `${r1}${r2}` : isSuited ? `${hiRank}${loRank}s` : `${hiRank}${loRank}o`;
   const category = pct < 5 ? 'Premium' : pct < 12 ? 'Strong' : pct < 25 ? 'Playable' : pct < 45 ? 'Marginal' : pct < 70 ? 'Weak' : 'Trash';
 
   return (
@@ -721,7 +736,7 @@ const MatrixCell: React.FC<{
   );
 };
 
-const StartingHandsMatrix: React.FC = () => (
+const StartingHandsMatrix: React.FC = React.memo(() => (
   <div className="inline-block min-w-full">
     {/* Legend - gradient bar */}
     <div className="flex items-center gap-2 mb-3 text-[10px] flex-wrap">
@@ -743,15 +758,22 @@ const StartingHandsMatrix: React.FC = () => (
           <div className="h-6 sm:h-7 flex items-center justify-center text-[10px] sm:text-[11px] font-black text-text-secondary/50">{r1}</div>
           {RANKS.map((r2, j) => {
             const isPair = i === j;
-            const isSuited = i > j;
-            const label = isPair ? `${r1}${r2}` : isSuited ? `${r2}${r1}s` : `${r1}${r2}o`;
+            const isSuited = i < j; // above diagonal = suited (higher index in RANKS = lower rank)
+            // Always put higher rank first: pairs "AA", suited "AKs", offsuit "AKo"
+            const hiRank = RANKS[Math.min(i, j)];
+            const loRank = RANKS[Math.max(i, j)];
+            const label = isPair
+              ? `${r1}${r2}`
+              : isSuited
+                ? `${hiRank}${loRank}s`
+                : `${hiRank}${loRank}o`;
             const pct = getHandPercentile(i, j, isPair, isSuited);
             return (
               <MatrixCell
                 key={`${i}-${j}`}
                 label={label} pct={pct} i={i} j={j}
                 isPair={isPair} isSuited={isSuited}
-                r1={r1} r2={r2}
+                r1={r1} r2={r2} hiRank={hiRank} loRank={loRank}
               />
             );
           })}
@@ -759,6 +781,8 @@ const StartingHandsMatrix: React.FC = () => (
       ))}
     </div>
   </div>
-);
+));
+
+StartingHandsMatrix.displayName = 'StartingHandsMatrix';
 
 export default App;

@@ -2,28 +2,66 @@ import type { Card, GameState, Player } from '../types/card';
 import { cardRankValue, isSuited, isConnected } from './deck';
 import { evaluateHand } from './handEvaluator';
 
+// ── Type Definitions ──
+
+/**
+ * Bot personality archetypes that determine play style.
+ *
+ * - `tight-aggressive` (TAG): Plays few hands but bets/raises aggressively.
+ *   High accuracy, low variance. Preferred for consistent profit.
+ * - `loose-aggressive` (LAG): Plays many hands with frequent aggression.
+ *   High variance, harder to read. Can win big or lose big.
+ * - `tight-passive` (Nit/Rock): Plays very few hands and rarely bets.
+ *   Folds often, easy to exploit by aggressive players.
+ * - `balanced`: Mix of TAG and LAG — unpredictable, GTO-inspired.
+ */
 export type BotPersonality = 'tight-aggressive' | 'loose-aggressive' | 'tight-passive' | 'balanced';
 
+/**
+ * Configuration for bot decision-making behavior.
+ *
+ * All probability values are in the range 0–1.
+ */
 export interface BotSettings {
-  aggressionFactor: number;   // 0-1: how often to bet/raise vs check/call
-  bluffFrequency: number;     // 0-1: bluff frequency
-  mistakeRate: number;        // 0-1: intentional mistake rate
-  reactionTimeMin: number;    // seconds
-  reactionTimeMax: number;    // seconds
+  /** How often the bot chooses bet/raise over check/call (0–1) */
+  aggressionFactor: number;
+  /** Probability of pure bluff when equity is low (0–1) */
+  bluffFrequency: number;
+  /** Probability of intentionally misreading hand strength (0–1) */
+  mistakeRate: number;
+  /** Minimum simulated reaction time in seconds */
+  reactionTimeMin: number;
+  /** Maximum simulated reaction time in seconds */
+  reactionTimeMax: number;
+  /** Current personality preset */
   personality: BotPersonality;
+  /** Perceived table image that affects how opponents react */
   tableImage: 'rock' | 'tag' | 'loose' | 'maniac' | 'nit';
-  tiltThreshold: number;      // bad beats before tilt
-  currentTilt: number;        // current tilt level
+  /** Number of bad beats before tilt activates */
+  tiltThreshold: number;
+  /** Current tilt counter — increases with bad beats */
+  currentTilt: number;
 }
 
+/**
+ * A single decision returned by the bot engine.
+ */
 export interface BotDecision {
+  /** The chosen action */
   action: 'fold' | 'check' | 'call' | 'raise';
+  /** Raise amount (only set when action is 'raise') */
   amount?: number;
+  /** Confidence in the decision (0–1, higher = more certain) */
   confidence: number;
+  /** Human-readable explanation of the decision */
   reasoning: string;
+  /** Simulated reaction time in seconds */
   reactionTime: number;
+  /** Whether this is a bluff */
   isBluff: boolean;
 }
+
+// ── Defaults ──
 
 const DEFAULT_SETTINGS: BotSettings = {
   aggressionFactor: 0.6,
@@ -37,6 +75,22 @@ const DEFAULT_SETTINGS: BotSettings = {
   currentTilt: 0,
 };
 
+// ── Factory Functions ──
+
+/**
+ * Create bot settings for the training bot based on a personality archetype.
+ *
+ * Training bots have more extreme settings to make their behavior more
+ * distinct and educational — players can learn to identify patterns.
+ *
+ * Personality presets:
+ * | Archetype        | Aggression | Bluff % | Mistake % | Table Image |
+ * |------------------|-----------|---------|-----------|-------------|
+ * | tight-aggressive | 0.75      | 15%     | 1%        | TAG         |
+ * | loose-aggressive | 0.85      | 25%     | 5%        | Maniac      |
+ * | tight-passive    | 0.30      | 5%      | 1%        | Nit         |
+ * | balanced         | 0.55      | 12%     | 2%        | TAG         |
+ */
 export function createBotSettings(personality: BotPersonality): BotSettings {
   const settings = { ...DEFAULT_SETTINGS };
   settings.personality = personality;
@@ -69,7 +123,13 @@ export function createBotSettings(personality: BotPersonality): BotSettings {
   return settings;
 }
 
-/** Simplified opponent bot settings — less adjustable, more predictable */
+/**
+ * Create settings for opponent bots (non-training bots at the table).
+ *
+ * Opponent settings are more moderate than training bot settings — they play
+ * closer to GTO and are less predictable by design, simulating real opponents.
+ * Mistake rates are slightly higher to reflect human-like play.
+ */
 export function createOpponentSettings(personality: BotPersonality): BotSettings {
   const settings = { ...DEFAULT_SETTINGS };
   settings.personality = personality;
@@ -98,7 +158,14 @@ export function createOpponentSettings(personality: BotPersonality): BotSettings
   return settings;
 }
 
-// --- Preflop hand strength tiers (0-10 scale) ---
+/**
+ * Evaluate preflop hand strength on a 0–10 scale.
+ *
+ * Considers pocket pairs, high-card combinations, suitedness, connectedness,
+ * and gap size. Returns an integer tier where 10 = premium (QQ+), 1 = junk.
+ *
+ * TODO: Replace with a proper preflop equity lookup table for GTO accuracy.
+ */
 function preflopTier(holeCards: Card[]): number {
   if (holeCards.length < 2) return 0;
   const v1 = cardRankValue(holeCards[0].rank);

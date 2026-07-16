@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { Card as CardType } from '../types/card';
 import { Trophy, Sparkles, Coins } from 'lucide-react';
@@ -533,23 +533,30 @@ const PokerTable: React.FC = React.memo(() => {
     return null;
   };
 
-  // Community card deal delays — staggered per card
-  const communityDelays = useMemo(() =>
-    gameState.communityCards.map((_, i) => {
-      // Flop: 3 cards at 0, 120, 240ms; Turn: one at 0ms; River: one at 0ms
-      if (gameState.currentPhase === 'flop' || (gameState.communityCards.length <= 3)) {
-        return i * 120;
-      }
-      return 0;
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gameState.communityCards.length, handKey]
-  );
+  // Track previous community card count for staggered deal animation
+  const prevCommunityCountRef = useRef(0);
+
+  useEffect(() => {
+    prevCommunityCountRef.current = gameState.communityCards.length;
+  }, [gameState.communityCards.length]);
+
+  // Community card deal delays — staggered per card, only new cards animate
+  const communityDelays = useMemo(() => {
+    const prevCount = prevCommunityCountRef.current;
+    return gameState.communityCards.map((_, i) => {
+      if (i < prevCount) return 0; // already dealt — no animation
+      const offset = prevCount === 0 ? 0 : 1; // flop starts immediately, later streets have brief delay
+      return (i - prevCount + offset) * 120;
+    });
+  }, [gameState.communityCards.length, handKey]);
+
 
   return (
-    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)', minWidth: '320px' }}>
+    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)', minWidth: '320px' }} role="region" aria-label="Poker table">
       {/* ── Table ── */}
       <div className="absolute inset-0 rounded-[42%] bg-wood-rail border-[10px] border-[#2a1f15] shadow-table overflow-hidden">
+        {/* Wood rail grain overlay */}
+        <div className="absolute inset-0 rounded-[42%] pointer-events-none wood-grain" />
         {/* Wood rail inner highlight */}
         <div className="absolute inset-0 rounded-[42%] pointer-events-none"
           style={{
@@ -577,16 +584,45 @@ const PokerTable: React.FC = React.memo(() => {
             <CardDisplay
               key={card.id}
               card={card}
-              size="md"
+              size="lg"
               dealDelay={communityDelays[i] || 0}
             />
           ))}
           {Array.from({ length: 5 - gameState.communityCards.length }).map((_, i) => (
             <div key={`empty-${i}`}
-              className="w-10 h-16 md:w-12 md:h-[4.5rem] rounded-xl border border-dashed border-white/[0.04] bg-white/[0.015]"
+              className="w-14 h-20 md:w-16 md:h-24 rounded-xl border border-dashed border-white/[0.04] bg-white/[0.015]"
               style={{ opacity: 0.3 + i * 0.1 }} />
           ))}
         </div>
+
+        {/* ── Dealer button chip on felt ── */}
+        {(() => {
+          const dealerIdx = gameState.dealerPosition;
+          const players = gameState.players;
+          if (dealerIdx < 0 || dealerIdx >= players.length) return null;
+          const humanIdx2 = players.findIndex(p => !p.isBot);
+          const isDealerHuman = dealerIdx === humanIdx2;
+          const arcBotList = players.filter(p => p.isBot);
+          // Find dealer's position among arc bots (if dealer is a bot)
+          const arcIndex = arcBotList.findIndex(p => players.indexOf(p) === dealerIdx);
+          const dealerPos = isDealerHuman || arcIndex < 0
+            ? { x: 50, y: 85 } // human seat: bottom center
+            : getPlayerPosition(arcIndex, arcBotList.length);
+          return (
+            <div
+              className="absolute z-15 transition-all duration-500"
+              style={{
+                left: `${dealerPos.x}%`,
+                top: `${Math.max(8, dealerPos.y - 5)}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white shadow-lg border-[2.5px] border-gray-300 flex items-center justify-center animate-fade-in">
+                <span className="text-[9px] sm:text-[10px] font-black text-black leading-none">D</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Pot + Side Pots ── */}
         <PotDisplay pot={gameState.pot} sidePots={gameState.sidePots} />

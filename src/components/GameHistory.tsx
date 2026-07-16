@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { Filter, TrendingUp, TrendingDown, DollarSign, Hash, Clock, Users, ChevronRight } from 'lucide-react';
+import { TrendingUp, DollarSign, Hash, Clock, ChevronRight } from 'lucide-react';
 
 type FilterType = 'all' | 'win' | 'loss';
 

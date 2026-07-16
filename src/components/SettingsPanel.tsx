@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
 import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users } from 'lucide-react';
 
-const SettingsPanel: React.FC = () => {
+const SettingsPanel: React.FC = React.memo(() => {
   const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
   const botSettings = useGameStore(s => s.botSettings);
   const updateTrainingBotSettings = useGameStore(s => s.updateTrainingBotSettings);
@@ -287,6 +287,8 @@ const SettingsPanel: React.FC = () => {
       </button>
     </div>
   );
-};
+});
+
+SettingsPanel.displayName = 'SettingsPanel';
 
 export default SettingsPanel;
