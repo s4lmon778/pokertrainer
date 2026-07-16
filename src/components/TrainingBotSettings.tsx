@@ -12,15 +12,124 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { DEFAULT_TRAINING_CONFIG, TRAINING_PRESETS, type TrainingBotConfig } from '../engine/trainingBot';
-import { Settings, Save, RotateCcw, Play, Sliders, TrendingUp, Brain, Shield, Zap, AlertTriangle, Users, BarChart3, Eye } from 'lucide-react';
+import {
+  DEFAULT_TRAINING_CONFIG,
+  TRAINING_PRESETS,
+  savePreset,
+  loadPreset,
+  deletePreset,
+  listPresets,
+  type TrainingBotConfig,
+} from '../engine/trainingBot';
+import {
+  Settings, Save, RotateCcw, Play, Sliders, TrendingUp, Brain, Shield, Zap, AlertTriangle, Users, BarChart3, Eye, Sparkles, Trash2, Loader2,
+} from 'lucide-react';
 
 const TrainingBotSettings: React.FC = () => {
   const trainingBotConfig = useGameStore(s => s.trainingBotConfig);
   const updateTrainingBotConfig = useGameStore(s => s.updateTrainingBotConfig);
   const [localConfig, setLocalConfig] = useState<TrainingBotConfig>(trainingBotConfig);
-  const [activeTab, setActiveTab] = useState<'general' | 'aggression' | 'bluffing' | 'postflop' | 'humanization' | 'tilt' | 'adaptation'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'aggression' | 'bluffing' | 'postflop' | 'humanization' | 'tilt' | 'adaptation' | 'presets'>('general');
   const [preset, setPreset] = useState<string>('balanced');
+
+  // ── Custom Preset Management ──
+
+  /** List of saved custom preset names */
+  const [customPresets, setCustomPresets] = useState<string[]>([]);
+
+  /** Name entered for a new preset */
+  const [newPresetName, setNewPresetName] = useState('');
+
+  /** Whether the save-preset input dialog is visible */
+  const [showSavePreset, setShowSavePreset] = useState(false);
+
+  /** Feedback message for preset operations (success/error) */
+  const [presetFeedback, setPresetFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  /** Loading state for async preset operations */
+  const [presetLoading, setPresetLoading] = useState<string | null>(null);
+
+  // Refresh the custom preset list on mount
+  useEffect(() => {
+    setCustomPresets(listPresets());
+  }, []);
+
+  // Auto-dismiss feedback after 3 seconds
+  useEffect(() => {
+    if (presetFeedback) {
+      const timer = setTimeout(() => setPresetFeedback(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [presetFeedback]);
+
+  /**
+   * Save the current config as a named custom preset.
+   * Validates that a name was entered, then calls savePreset and refreshes the list.
+   */
+  const handleSavePreset = useCallback(() => {
+    const name = newPresetName.trim();
+    if (!name) {
+      setPresetFeedback({ type: 'error', message: 'Please enter a preset name.' });
+      return;
+    }
+    if (!TRAINING_PRESETS[name] && customPresets.includes(name)) {
+      setPresetFeedback({ type: 'error', message: `A preset named "${name}" already exists.` });
+      return;
+    }
+    try {
+      savePreset(name, localConfig);
+      setCustomPresets(listPresets());
+      setNewPresetName('');
+      setShowSavePreset(false);
+      setPresetFeedback({ type: 'success', message: `Preset "${name}" saved!` });
+    } catch {
+      setPresetFeedback({ type: 'error', message: 'Failed to save preset.' });
+    }
+  }, [newPresetName, localConfig, customPresets]);
+
+  /**
+   * Load a custom preset into the current config state.
+   * @param name — the preset name to load
+   */
+  const handleLoadPreset = useCallback((name: string) => {
+    setPresetLoading(name);
+    try {
+      const loaded = loadPreset(name);
+      if (loaded) {
+        setLocalConfig(loaded);
+        setPreset(name);
+        setPresetFeedback({ type: 'success', message: `Loaded preset "${name}".` });
+      } else {
+        setPresetFeedback({ type: 'error', message: `Preset "${name}" not found.` });
+      }
+    } catch {
+      setPresetFeedback({ type: 'error', message: 'Failed to load preset.' });
+    } finally {
+      setPresetLoading(null);
+    }
+  }, []);
+
+  /**
+   * Delete a custom preset and refresh the list.
+   * @param name — the preset name to delete
+   */
+  const handleDeletePreset = useCallback((name: string) => {
+    try {
+      deletePreset(name);
+      setCustomPresets(listPresets());
+      if (preset === name) setPreset('balanced');
+      setPresetFeedback({ type: 'success', message: `Deleted preset "${name}".` });
+    } catch {
+      setPresetFeedback({ type: 'error', message: 'Failed to delete preset.' });
+    }
+  }, [preset]);
+
+  /** Reset all settings to the default config. */
+  const handleResetToDefault = useCallback(() => {
+    setLocalConfig(DEFAULT_TRAINING_CONFIG);
+    setPreset('balanced');
+    setPresetFeedback({ type: 'success', message: 'Reset to default config.' });
+  }, []);
 
   // Sync with store
   useEffect(() => {
@@ -103,6 +212,7 @@ const TrainingBotSettings: React.FC = () => {
           { id: 'humanization', label: 'Humanization', icon: Users },
           { id: 'tilt', label: 'Tilt', icon: AlertTriangle },
           { id: 'adaptation', label: 'Adaptation', icon: TrendingUp },
+          { id: 'presets', label: 'Presets', icon: Sparkles },
         ].map(tab => (
           <button
             key={tab.id}
@@ -365,6 +475,117 @@ const TrainingBotSettings: React.FC = () => {
               step={0.01}
               onChange={(v) => updateConfig('gtoDeviation', v)}
             />
+          </div>
+        )}
+
+        {activeTab === 'presets' && (
+          <div className="space-y-6">
+            {/* Feedback message */}
+            {presetFeedback && (
+              <div
+                className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                  presetFeedback.type === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                }`}
+              >
+                {presetFeedback.message}
+              </div>
+            )}
+
+            {/* Save new preset */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">Save Current Config</h3>
+              {!showSavePreset ? (
+                <button
+                  onClick={() => setShowSavePreset(true)}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <Sparkles size={16} />
+                  Save Current as Preset
+                </button>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                  <input
+                    type="text"
+                    value={newPresetName}
+                    onChange={e => setNewPresetName(e.target.value)}
+                    placeholder="Enter preset name…"
+                    className="input-field flex-1 text-sm min-w-0"
+                    onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSavePreset}
+                    className="btn-primary flex items-center gap-1.5 text-sm shrink-0"
+                  >
+                    <Save size={14} />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => { setShowSavePreset(false); setNewPresetName(''); }}
+                    className="btn-secondary text-sm shrink-0"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Saved custom presets list */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
+                Saved Presets ({customPresets.length})
+              </h3>
+              {customPresets.length === 0 ? (
+                <p className="text-sm text-text-secondary/50 italic">No custom presets saved yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {customPresets.map(name => (
+                    <div
+                      key={name}
+                      className="flex items-center justify-between bg-white/5 rounded-lg px-4 py-2.5 group hover:bg-white/10 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-text-primary capitalize">{name}</span>
+                      <div className="flex items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleLoadPreset(name)}
+                          disabled={presetLoading === name}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-gold/10 text-gold hover:bg-gold/20 transition-colors disabled:opacity-50"
+                          title={`Load preset "${name}"`}
+                        >
+                          {presetLoading === name ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Play size={12} />
+                          )}
+                          Load
+                        </button>
+                        <button
+                          onClick={() => handleDeletePreset(name)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                          title={`Delete preset "${name}"`}
+                        >
+                          <Trash2 size={12} />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Reset to default */}
+            <div className="pt-4 border-t border-white/10">
+              <button
+                onClick={handleResetToDefault}
+                className="btn-secondary flex items-center gap-2 w-full justify-center"
+              >
+                <RotateCcw size={16} />
+                Reset to Default
+              </button>
+            </div>
           </div>
         )}
       </div>
