@@ -1,5 +1,7 @@
-import React from 'react';
-import { BookOpen, Trophy, Zap, Brain } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, Trophy, Zap, Brain, Cpu } from 'lucide-react';
+import { GTOSolver } from './GTOSolver';
+import type { CardIndex } from '../engine/gto-solver/types';
 
 const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 
@@ -212,6 +214,19 @@ const RulesPage: React.FC = React.memo(() => {
         <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Zap size={18} className="text-gold" /> Preflop Starting Hands</h3>
         <p className="text-xs text-text-secondary/60 mb-4">Color-coded matrix of all 169 starting hands. Pairs on diagonal, suited above, offsuit below. Green = premium, red = weak.</p>
         <StartingHandsMatrix />
+      </div>
+
+      <div className="card-premium">
+        <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Cpu size={18} className="text-accent-blue" /> GTO Solver</h3>
+        <p className="text-xs text-text-secondary/60 mb-4">
+          Interactive Game Theory Optimal solver powered by Discounted CFR algorithm. 
+          Select a board and hands to compute optimal strategies.
+        </p>
+        <GTOSolver 
+          board={[0, 13, 26] as CardIndex[]} // Example: 2c, 2d, 2h (simplified)
+          heroHand={[1, 14] as CardIndex[]}  // Example: Ac, Ad
+          villainHand={[2, 15] as CardIndex[]} // Example: Kc, Kh
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
