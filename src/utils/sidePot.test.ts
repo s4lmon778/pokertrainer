@@ -147,9 +147,9 @@ describe('calculateSidePots', () => {
       { suit: 'hearts', rank: '6', id: '6h' },
     ];
     const result = calculateSidePots(players, community);
-    // 101 each = 202 total, split 101 each, 1 remainder to p1 (first winner)
-    expect(result.distribution['p1']).toBe(102);
-    expect(result.distribution['p2']).toBe(100);
+    // 101 each = 202 total, split 101 each (even, no remainder)
+    expect(result.distribution['p1']).toBe(101);
+    expect(result.distribution['p2']).toBe(101);
   });
 
   it('returns empty distributions when no players contributed', () => {
