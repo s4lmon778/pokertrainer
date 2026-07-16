@@ -5,6 +5,7 @@ import { createDeck, shuffleDeck } from '../utils/deck';
 import { evaluateHand } from '../utils/handEvaluator';
 import { botDecision, type BotSettings, createBotSettings, createOpponentSettings, type BotPersonality } from '../utils/botEngine';
 import { calculateSidePots } from '../utils/sidePot';
+import { DEFAULT_TRAINING_CONFIG, type TrainingBotConfig } from '../engine/trainingBot';
 
 /**
  * TODO: Future Training Bot integration points:
@@ -86,6 +87,8 @@ interface GameStore {
   isPlaying: boolean;
   isDealing: boolean;
   botSettings: BotSettings;
+  /** Training Bot configuration — shared between web UI and future desktop bot */
+  trainingBotConfig: TrainingBotConfig;
   trainingBotSettings: BotSettings;
   opponentPersonality: BotPersonality;
   gameHistory: GameHistoryEntry[];
@@ -117,6 +120,7 @@ interface GameStore {
   advanceTurn: () => void;
   updateBotSettings: (settings: Partial<BotSettings>) => void;
   updateTrainingBotSettings: (settings: Partial<BotSettings>) => void;
+  updateTrainingBotConfig: (config: Partial<TrainingBotConfig>) => void;
   setPersonality: (personality: BotPersonality) => void;
   setTrainingPersonality: (personality: BotPersonality) => void;
   setOpponentPersonality: (personality: BotPersonality) => void;
@@ -189,6 +193,7 @@ export const useGameStore = create<GameStore>()(
       isPlaying: false,
       isDealing: false,
       botSettings: createBotSettings('balanced'),
+    trainingBotConfig: DEFAULT_TRAINING_CONFIG,
       trainingBotSettings: createBotSettings('tight-aggressive'),
       opponentPersonality: 'balanced' as BotPersonality,
       gameHistory: [],
@@ -902,6 +907,7 @@ export const useGameStore = create<GameStore>()(
       // ── Settings & utilities ──
       updateBotSettings: (settings) => set(s => ({ botSettings: { ...s.botSettings, ...settings } })),
       updateTrainingBotSettings: (settings) => set(s => ({ trainingBotSettings: { ...s.trainingBotSettings, ...settings } })),
+      updateTrainingBotConfig: (config) => set(s => ({ trainingBotConfig: { ...s.trainingBotConfig, ...config } })),
       setPersonality: (personality) => set({ botSettings: createBotSettings(personality), selectedBotPersonality: personality }),
       setTrainingPersonality: (personality) => set({ trainingBotSettings: createBotSettings(personality) }),
       setOpponentPersonality: (personality) => set({ botSettings: createOpponentSettings(personality), opponentPersonality: personality }),
