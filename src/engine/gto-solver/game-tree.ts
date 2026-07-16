@@ -61,15 +61,19 @@ function buildRootNode(settings: TreeBuilderSettings): Node {
 /**
  * Create initial game state from settings.
  */
-function createInitialState(settings: TreeBuilderSettings) {
+function createInitialState(settings: TreeBuilderSettings): GameState {
   return {
-    board: settings.initialBoard,
+    board: [...settings.initialBoard],
     street: settings.initialStreet,
     pot: settings.startingPot,
     stacks: [settings.startingStack, settings.startingStack] as [number, number],
     currentPlayer: (settings.inPositionPlayer === 0 ? 1 : 0) as 0 | 1, // Non-position acts first
     lastToAct: 0 as 0 | 1,
     currentBet: 0,
+    minimumBet: settings.minimumBet,
+    raiseCount: 0,
+    lastAction: undefined,
+    isAllIn: false,
   };
 }
 
@@ -83,17 +87,27 @@ function buildActionNode(parent: Node | null, state: GameState, settings: TreeBu
     actions: [],
     children: [],
   };
-  
+
+  // Check if already terminal before building actions
+  if (isTerminalState(state)) {
+    return node;
+  }
+
   // Get legal actions based on street and game state
   const legalActions = getLegalActions(state, settings);
-  
+
+  // If no legal actions, treat as terminal (e.g., both all-in with no options)
+  if (legalActions.length === 0) {
+    return node;
+  }
+
   for (const action of legalActions) {
     const nextState = applyAction(state, action, settings);
     const child = buildChildNode(node, nextState, action, settings);
     node.children.push(child);
     node.actions.push(action);
   }
-  
+
   return node;
 }
 
@@ -101,24 +115,40 @@ function buildActionNode(parent: Node | null, state: GameState, settings: TreeBu
  * Build the appropriate child node based on the action taken.
  */
 function buildChildNode(parent: ActionNode, state: GameState, action: Action, settings: TreeBuilderSettings): Node {
-  // Check if this leads to a terminal state
+  // Check if this action leads to a terminal state
   if (isTerminalState(state)) {
     return buildTerminalNode(parent, state);
   }
-  
-  // Check if we need to deal a chance card (turn or river)
-  if (state.street === 'flop' && action.kind === 'CHECK' && state.lastToAct === 0) {
-    // Both players checked on flop, deal turn card
-    return buildChanceNode(parent, state, 'turn', settings);
+
+  // Check if the betting round is complete and we need to deal the next street
+  const bettingRoundComplete =
+    state.currentBet === 0 &&
+    state.lastAction !== undefined &&
+    (state.lastAction === 'CHECK' || state.lastAction === 'CALL') &&
+    state.lastToAct !== state.currentPlayer; // Both players have acted
+
+  if (bettingRoundComplete) {
+    const nextStreet = getNextStreet(state.street);
+    if (nextStreet) {
+      return buildChanceNode(parent, state, nextStreet, settings);
+    }
+    // If no next street (shouldn't happen since river terminal is caught above),
+    // treat as terminal
+    return buildTerminalNode(parent, state);
   }
-  
-  if (state.street === 'turn' && action.kind === 'CHECK' && state.lastToAct === 0) {
-    // Both players checked on turn, deal river card
-    return buildChanceNode(parent, state, 'river', settings);
-  }
-  
+
   // Continue with action nodes
   return buildActionNode(parent, state, settings);
+}
+
+/**
+ * Get the next street after the current one.
+ * Returns null if there is no next street (river).
+ */
+function getNextStreet(street: Street): Street | null {
+  if (street === 'flop') return 'turn';
+  if (street === 'turn') return 'river';
+  return null; // river has no next street
 }
 
 /**
@@ -161,96 +191,225 @@ function buildTerminalNode(parent: ActionNode, state: GameState): TerminalNode {
 /**
  * Get legal actions for the current player in the current state.
  */
-function getLegalActions(state: GameState, settings: TreeBuilderSettings): Action[] {
+export function getLegalActions(state: GameState, settings: TreeBuilderSettings): Action[] {
   const actions: Action[] = [];
-  
-  // Always can check or fold (if facing a bet)
-  if (state.currentBet === 0) {
-    actions.push({ kind: 'CHECK' });
-  } else {
-    actions.push({ kind: 'FOLD' });
-    actions.push({ kind: 'CALL' });
+  const currentPlayer = state.currentPlayer;
+  const remainingChips = state.stacks[currentPlayer];
+  const raiseCap = settings.raiseCap ?? MAX_RAISES_PER_STREET;
+  const canRaiseMore = state.raiseCount < raiseCap;
+
+  // Cannot act if all-in with no chips
+  const isAllIn = remainingChips <= 0;
+  if (isAllIn) {
+    return actions;
   }
-  
-  // Can bet/raise if has chips left
-  const remainingChips = state.stacks[state.currentPlayer];
-  if (remainingChips > 0) {
-    const streetConfig = BET_SIZING[state.street];
-    
-    // Add bet sizes
-    for (const size of streetConfig.bets) {
-      const betAmount = Math.floor(state.pot * size);
-      if (betAmount >= settings.minimumBet && betAmount <= remainingChips) {
-        actions.push({ kind: 'BET', size });
-      }
+
+  // Facing a bet: can fold, call, or raise (if raise cap not reached)
+  const facingBet = state.currentBet > 0;
+  if (facingBet) {
+    actions.push({ kind: 'FOLD' });
+    // Call amount is limited by remaining chips (all-in call)
+    const callAmount = Math.min(state.currentBet, remainingChips);
+    if (callAmount > 0) {
+      actions.push({ kind: 'CALL' });
     }
-    
-    // Add raise sizes (only if facing a bet)
-    if (state.currentBet > 0) {
-      for (const raiseSize of streetConfig.raises) {
-        const raiseAmount = Math.floor(state.currentBet * raiseSize);
-        if (raiseAmount <= remainingChips) {
-          actions.push({ kind: 'RAISE', size: raiseSize });
+  } else {
+    // No bet facing: can check
+    actions.push({ kind: 'CHECK' });
+  }
+
+  // Can bet/raise if has chips left and hasn't exceeded raise cap
+  if (remainingChips > 0 && (!facingBet || canRaiseMore)) {
+    const streetConfig = BET_SIZING[state.street];
+    const isAllInThreshold =
+      remainingChips <= state.pot * settings.allInThreshold;
+
+    if (isAllInThreshold && remainingChips > 0) {
+      // Only all-in bet available (simplify to one action)
+      actions.push({ kind: facingBet ? 'RAISE' : 'BET', size: remainingChips / state.pot });
+    } else {
+      // Add bet sizes
+      if (!facingBet) {
+        for (const size of streetConfig.bets) {
+          const betAmount = Math.floor(state.pot * size);
+          if (betAmount >= state.minimumBet && betAmount <= remainingChips) {
+            actions.push({ kind: 'BET', size });
+          }
+        }
+      }
+
+      // Add raise sizes (only if facing a bet)
+      if (facingBet && canRaiseMore) {
+        for (const raiseSize of streetConfig.raises) {
+          const raiseAmount = Math.floor(state.currentBet * (1 + raiseSize));
+          if (raiseAmount <= remainingChips + state.currentBet) {
+            actions.push({ kind: 'RAISE', size: raiseSize });
+          }
         }
       }
     }
   }
-  
+
   return actions;
 }
 
 /**
  * Apply an action to the game state and return the new state.
  */
-function applyAction(state: GameState, action: Action, settings: TreeBuilderSettings): GameState {
-  const newState = { ...state };
-  
+export function applyAction(state: GameState, action: Action, settings: TreeBuilderSettings): GameState {
+  const currentPlayer = state.currentPlayer;
+  const remainingChips = state.stacks[currentPlayer];
+
+  // Deep copy stacks
+  const newState: GameState = {
+    ...state,
+    stacks: [...state.stacks] as [number, number],
+    board: [...state.board],
+    lastAction: action.kind,
+  };
+
   switch (action.kind) {
     case 'CHECK':
-      newState.lastToAct = state.currentPlayer;
+      // Both players have now checked if lastToAct was the other player
+      newState.lastToAct = currentPlayer;
+      newState.raiseCount = 0; // Reset raise count on new betting round concept
       break;
-    case 'BET':
-    case 'RAISE':
-      const betAmount = action.size ? Math.floor(state.pot * action.size) : (state.minimumBet || 0);
-      newState.stacks[state.currentPlayer] -= betAmount;
-      newState.pot += betAmount;
-      newState.currentBet = betAmount;
-      newState.lastToAct = state.currentPlayer;
+
+    case 'BET': {
+      const betSize = action.size ?? 0.5;
+      const betAmount = Math.min(
+        Math.floor(state.pot * betSize),
+        remainingChips
+      );
+      const actualBet = Math.max(betAmount, state.minimumBet);
+      newState.stacks[currentPlayer] -= actualBet;
+      newState.pot += actualBet;
+      newState.currentBet = actualBet;
+      newState.lastToAct = currentPlayer;
+      newState.raiseCount = 0;
       break;
-    case 'CALL':
-      const callAmount = state.currentBet - 0; // Simplified
-      newState.stacks[state.currentPlayer] -= callAmount;
+    }
+
+    case 'RAISE': {
+      const raiseSize = action.size ?? 1.0;
+      const raiseAmount = Math.min(
+        Math.floor(state.currentBet * (1 + raiseSize)),
+        remainingChips + state.currentBet
+      );
+      const amountToAdd = raiseAmount - state.currentBet;
+      newState.stacks[currentPlayer] -= amountToAdd;
+      newState.pot += amountToAdd;
+      newState.currentBet = raiseAmount;
+      newState.lastToAct = currentPlayer;
+      newState.raiseCount = state.raiseCount + 1;
+      break;
+    }
+
+    case 'CALL': {
+      const callAmount = Math.min(state.currentBet, remainingChips);
+      newState.stacks[currentPlayer] -= callAmount;
       newState.pot += callAmount;
+      newState.currentBet = 0; // Betting round closed
+      newState.raiseCount = 0;
       break;
+    }
+
     case 'FOLD':
-      // Terminal state - opponent wins
+      // Terminal state — no further actions
+      // Mark the current player as folded by zeroing their stack contribution this round
+      newState.lastAction = 'FOLD';
       break;
   }
-  
-  // Switch player
-  newState.currentPlayer = newState.currentPlayer === 0 ? 1 : 0;
-  
+
+  // Check for all-in
+  if (newState.stacks[currentPlayer] <= 0) {
+    newState.isAllIn = true;
+    newState.stacks[currentPlayer] = 0;
+  }
+
+  // Switch player (unless terminal fold)
+  if (action.kind !== 'FOLD') {
+    newState.currentPlayer = (currentPlayer === 0 ? 1 : 0) as 0 | 1;
+  }
+
   return newState;
 }
 
 /**
  * Check if the current state is terminal (hand ended).
+ *
+ * Terminal conditions:
+ * 1. A player folded — pot awarded to the other player
+ * 2. Both players all-in with no more streets — showdown at current equity
+ * 3. Betting round complete on the river (both players acted, no bet pending)
+ * 4. Both players checked through all streets with no more cards
  */
 function isTerminalState(state: GameState): boolean {
-  // Check if any player folded
-  // Check if all-in and no more cards to deal
-  // Check if betting round is complete
-  return false; // Simplified - real implementation needs more checks
+  // Condition 1: Fold
+  if (state.lastAction === 'FOLD') {
+    return true;
+  }
+
+  // Condition 2: Both all-in, no more streets to deal
+  const bothAllIn = state.stacks[0] <= 0 && state.stacks[1] <= 0;
+  if (bothAllIn) {
+    // On river, or if no more community cards to come — it's a showdown
+    if (state.street === 'river') {
+      return true;
+    }
+    // If all-in before river, we still deal remaining cards (handled by chance nodes)
+    // Terminal only if we're past all streets
+    return false;
+  }
+
+  // Condition 3: River betting round completed
+  if (state.street === 'river') {
+    // Betting complete when: both players acted and no outstanding bet
+    const bettingComplete =
+      state.currentBet === 0 &&
+      state.lastAction !== undefined &&
+      (state.lastAction === 'CHECK' || state.lastAction === 'CALL');
+    if (bettingComplete) {
+      return true;
+    }
+  }
+
+  // Condition 4: Check-through on all remaining streets (no more cards)
+  // This is caught by the river check above, plus the child builder logic
+  // For non-river, check if both players have acted with no bet
+  if (state.currentBet === 0 && state.lastAction === 'CHECK') {
+    // Both players checked on this street — need next street (chance node)
+    // Not terminal here; the chance node builder handles this in buildChildNode
+    return false;
+  }
+
+  return false;
 }
 
 /**
- * Compute terminal payoffs based on hand strengths.
+ * Compute terminal payoffs based on game outcome.
+ *
+ * - Fold: non-folding player wins the pot (zero-sum)
+ * - Showdown: equity-based payoff (placeholder — CFR traversal refines with hand sampling)
  */
 function computeTerminalPayoff(state: GameState): [number, number] {
-  // This is a simplified version - real implementation needs hand evaluation
-  // For now, return zero sum based on pot
-  const halfPot = state.pot / 2;
-  return [halfPot, -halfPot];
+  const pot = state.pot;
+
+  // Fold: last player who didn't fold wins the pot
+  if (state.lastAction === 'FOLD') {
+    // The player who folded loses; the other wins
+    const folder = state.currentPlayer; // currentPlayer is the one who just folded
+    if (folder === 0) {
+      return [-pot, pot]; // Hero folded → villain wins pot
+    } else {
+      return [pot, -pot]; // Villain folded → hero wins pot
+    }
+  }
+
+  // Showdown: equity-based (placeholder for hand evaluation)
+  // The CFR traversal will override with actual hand equity during sampling.
+  // Return zero-sum split based on pot — this gets refined during training.
+  return [0, 0]; // Placeholder: actual values computed during CFR with hand sampling
 }
 
 /**
@@ -320,5 +479,11 @@ export interface GameState {
   currentPlayer: 0 | 1;
   lastToAct: 0 | 1;
   currentBet: number;
-  minimumBet?: number;
+  minimumBet: number;
+  raiseCount: number;
+  lastAction?: 'CHECK' | 'BET' | 'FOLD' | 'CALL' | 'RAISE';
+  isAllIn: boolean;
 }
+
+/** Maximum number of raises allowed per street (default 3). */
+const MAX_RAISES_PER_STREET = 3;

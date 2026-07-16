@@ -42,9 +42,19 @@ async function handleSolveRequest(request: SolveRequest): Promise<void> {
     request.board,
     request.heroRange,
     request.villainRange,
-    request.stackSize,
-    request.potSize,
-    request.iterations,
+    {
+      stackSize: request.stackSize,
+      potSize: request.potSize,
+      iterations: request.iterations,
+      onProgress: (iteration, exploitability) => {
+        self.postMessage({
+          type: 'PROGRESS',
+          iteration,
+          total: request.iterations,
+          exploitability,
+        } as SolveProgress);
+      },
+    },
   );
   
   // Send complete response

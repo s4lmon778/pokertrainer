@@ -63,13 +63,45 @@ export interface SolverConfig {
   removeDonkBets: boolean;
 }
 
-// Default bet sizing config (from shark-2.0 Game.hh)
+// Bet sizing config with preflop support
 export const BET_SIZING = {
   preflop: { bets: [0.5, 1.0], raises: [1.0] },
   flop: { bets: [0.5, 1.0], raises: [1.0] },
   turn: { bets: [0.33, 0.66, 1.0], raises: [0.5, 1.0] },
   river: { bets: [0.33, 0.66, 1.0], raises: [0.5, 1.0] },
 } as const;
+
+// Web Worker message types
+export interface SolveRequest {
+  type: 'SOLVE';
+  board: CardIndex[];
+  heroRange: number[];
+  villainRange: number[];
+  stackSize: number;
+  potSize: number;
+  iterations: number;
+}
+
+export interface SolveProgress {
+  type: 'PROGRESS';
+  iteration: number;
+  total: number;
+  exploitability: number;
+}
+
+export interface SolveComplete {
+  type: 'COMPLETE';
+  result: SolveResult;
+  timeMs: number;
+}
+
+export interface SolveError {
+  type: 'ERROR';
+  error: string;
+}
+
+export type WorkerMessage = SolveRequest;
+export type WorkerResponse = SolveProgress | SolveComplete | SolveError;
 
 // Street types
 export type Street = 'flop' | 'turn' | 'river';

@@ -113,9 +113,11 @@ export const GTOSolver: React.FC<GTOSolverProps> = ({ board, heroHand, villainHa
         board,
         heroRangeIndices,
         villainRangeIndices,
-        100, // stack size
-        2,   // pot size
-        iterations
+        {
+          stackSize: 100,
+          potSize: 2,
+          iterations,
+        }
       );
       
       setResult(solveResult);

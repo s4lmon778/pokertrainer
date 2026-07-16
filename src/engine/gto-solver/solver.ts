@@ -23,32 +23,50 @@ const DEFAULT_SETTINGS = {
   removeDonkBets: false,
 };
 
+/** Options for the solve function. */
+export interface SolveOptions {
+  /** Starting stack size in big blinds (default 100). */
+  stackSize?: number;
+  /** Current pot size in big blinds (default 2). */
+  potSize?: number;
+  /** Number of DCFR iterations (default 100). */
+  iterations?: number;
+  /** Stop early if exploitability drops below this threshold. */
+  minExploitability?: number;
+  /** Called periodically with (iteration, exploitability) during solving. */
+  onProgress?: (iteration: number, exploitability: number) => void;
+}
+
 /**
  * Solve a poker position using DCFR.
- * 
+ *
  * @param board - Community cards (3 for flop, 4 for turn, 5 for river)
  * @param heroRange - Hero's range (array of hand indices)
  * @param villainRange - Villain's range (array of hand indices)
- * @param stackSize - Starting stack size in big blinds
- * @param potSize - Current pot size
- * @param iterations - Number of DCFR iterations (more = more accurate)
+ * @param options - Solver configuration options
  * @returns SolveResult with strategy and statistics
  */
 export function solve(
   board: CardIndex[],
   heroRange: number[],
   villainRange: number[],
-  stackSize: number = DEFAULT_SETTINGS.stackSize,
-  potSize: number = DEFAULT_SETTINGS.potSize,
-  iterations: number = DEFAULT_SETTINGS.iterations
+  options: SolveOptions = {}
 ): SolveResult {
-  const startTime = Date.now();
-  
+  const startTime = performance.now();
+
+  const {
+    stackSize = DEFAULT_SETTINGS.stackSize,
+    potSize = DEFAULT_SETTINGS.potSize,
+    iterations = DEFAULT_SETTINGS.iterations,
+    minExploitability,
+    onProgress,
+  } = options;
+
   // Determine street from board size
   const street = board.length === 3 ? 'flop' : board.length === 4 ? 'turn' : 'river';
-  
+
   // Build game tree
-  const settings: TreeBuilderSettings = {
+  const treeSettings: TreeBuilderSettings = {
     range1: { numHands: heroRange.length },
     range2: { numHands: villainRange.length },
     inPositionPlayer: 0, // Hero in position
@@ -61,24 +79,29 @@ export function solve(
     raiseCap: DEFAULT_SETTINGS.raiseCap,
     removeDonkBets: DEFAULT_SETTINGS.removeDonkBets,
   };
-  
-  const root = buildGameTree(settings);
-  
+
+  const root = buildGameTree(treeSettings);
+
   // Attach DCFR modules to action nodes
   attachDCFRModules(root);
-  
-  // Run solver
-  const { exploitability, timeMs } = solveDCFR(root, iterations);
-  
+
+  // Run solver with progress and early stopping
+  const { exploitability, timeMs } = solveDCFR(
+    root,
+    iterations,
+    minExploitability,
+    onProgress,
+  );
+
   // Collect strategies
   const strategy = collectStrategies(root);
-  
+
   return {
     root,
     iterations,
     exploitability,
     strategy,
-    solveTimeMs: Date.now() - startTime,
+    solveTimeMs: Math.round(performance.now() - startTime),
   };
 }
 
