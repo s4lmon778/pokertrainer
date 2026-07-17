@@ -942,6 +942,12 @@ export const useGameStore = create<GameStore>()(
           humanPosition: humanPositionName,
           humanHandCategory: handCategory,
           humanHandDescription: handDesc,
+          humanAccuracy: !isAuto ? (() => {
+            const evaluations = state.botEvaluations.filter(e => e.handNumber === gameState.handNumber);
+            if (evaluations.length === 0) return undefined;
+            const correct = evaluations.filter(e => e.isCorrect).length;
+            return Math.round((correct / evaluations.length) * 100);
+          })() : undefined,
         };
 
         set({

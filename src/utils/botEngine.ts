@@ -413,8 +413,8 @@ export function botDecision(
     const tier = preflopTier(holeCards);
     // tightLoose 0.2 = only top ~20% of hands, 0.8 = top ~80%
     const minTier = Math.floor(1 + (1 - settings.tightLoose) * 10);
-    if (tier < minTier) {
-      // Fold junk preflop
+    if (tier < minTier && effectiveBet > 0) {
+      // Fold junk preflop only when facing a bet
       return {
         action: 'fold', confidence: 0.9,
         reasoning: `Preflop fold — ${handEval.description} below tight/loose threshold (${settings.tightLoose.toFixed(2)})`,
