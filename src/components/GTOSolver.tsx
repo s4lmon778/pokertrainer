@@ -10,6 +10,7 @@ import { solve, getStrategyForHand } from '../engine/gto-solver/solver';
 import { cardIndexToString } from '../engine/gto-solver/equity';
 import type { SolveResult, CardIndex } from '../engine/gto-solver/types';
 import { RangeSelector } from './RangeSelector';
+import { StrategyChart, MultiActionChart } from './StrategyChart';
 
 interface GTOSolverProps {
   board: CardIndex[];
@@ -219,16 +220,32 @@ export const GTOSolver: React.FC<GTOSolverProps> = ({ board, heroHand, villainHa
       
       {/* Results */}
       {result && (
-        <div className="p-4 bg-gray-700 rounded">
-          <h4 className="font-bold mb-2">Solution Complete</h4>
-          <p className="text-sm">
-            Iterations: {result.iterations} | Time: {result.solveTimeMs}ms | Exploitability: {result.exploitability.toFixed(4)}
-          </p>
+        <div className="space-y-4">
+          <div className="p-4 bg-gray-700 rounded">
+            <h4 className="font-bold mb-2">Solution Complete</h4>
+            <p className="text-sm">
+              Iterations: {result.iterations} | Time: {result.solveTimeMs}ms | Exploitability: {result.exploitability.toFixed(4)}
+            </p>
+          </div>
           
-          <h5 className="font-bold mt-4 mb-2">Strategy for {heroHand.map(cardIndexToString).join('')}:</h5>
-          <pre className="text-xs bg-gray-900 p-2 rounded">
-            {formatStrategy()}
-          </pre>
+          {/* Strategy Chart */}
+          <MultiActionChart
+            title="GTO Strategy Visualization"
+            actions={[
+              { label: 'Check/Fold', data: strategy },
+              { label: 'Bet/Raise', data: new Map<string, number>([['BET', 1 - Array.from(strategy.values()).reduce((a, b) => a + b, 0)]]) },
+            ]}
+            heroHand={heroHand}
+            board={board}
+          />
+          
+          {/* Detailed Strategy Text */}
+          <div className="p-4 bg-gray-800 rounded">
+            <h5 className="font-bold mb-2">Strategy for {heroHand.map(cardIndexToString).join('')}:</h5>
+            <pre className="text-xs bg-gray-900 p-2 rounded">
+              {formatStrategy()}
+            </pre>
+          </div>
         </div>
       )}
     </div>
