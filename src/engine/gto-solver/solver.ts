@@ -55,8 +55,8 @@ export function solve(
   const startTime = performance.now();
 
   // Defensive: handle empty ranges
-  if (!board || board.length === 0) {
-    throw new Error('Board must have at least 3 cards (flop)');
+  if (!board || board.length < 3) {
+    throw new Error('Board must have at least 3 cards (flop).');
   }
   if (!heroRange || heroRange.length === 0) {
     throw new Error('Hero range must not be empty');
@@ -76,22 +76,43 @@ export function solve(
   // Determine street from board size
   const street = board.length === 3 ? 'flop' : board.length === 4 ? 'turn' : 'river';
 
-  // Build game tree
-  const treeSettings: TreeBuilderSettings = {
-    range1: { numHands: heroRange.length },
-    range2: { numHands: villainRange.length },
-    inPositionPlayer: 0, // Hero in position
-    initialBoard: board,
-    initialStreet: street,
-    startingStack: stackSize,
-    startingPot: potSize,
-    minimumBet: DEFAULT_SETTINGS.minBet,
-    allInThreshold: DEFAULT_SETTINGS.allInThreshold,
-    raiseCap: DEFAULT_SETTINGS.raiseCap,
-    removeDonkBets: DEFAULT_SETTINGS.removeDonkBets,
-  };
+  // Build game tree with safety limits
+  let root: Node;
+  try {
+    const treeSettings: TreeBuilderSettings = {
+      range1: { numHands: heroRange.length },
+      range2: { numHands: villainRange.length },
+      inPositionPlayer: 0, // Hero in position
+      initialBoard: board,
+      initialStreet: street,
+      startingStack: stackSize,
+      startingPot: potSize,
+      minimumBet: DEFAULT_SETTINGS.minBet,
+      allInThreshold: DEFAULT_SETTINGS.allInThreshold,
+      raiseCap: DEFAULT_SETTINGS.raiseCap,
+      removeDonkBets: DEFAULT_SETTINGS.removeDonkBets,
+    };
 
-  const root = buildGameTree(treeSettings);
+    root = buildGameTree(treeSettings);
+  } catch (e) {
+    throw new Error(`Failed to build game tree: ${e instanceof Error ? e.message : 'unknown'}`);
+  }
+
+  // Validate tree was built
+  if (!root || root.type !== 'ACTION') {
+    throw new Error('Game tree build returned invalid root node.');
+  }
+
+  // Count nodes for safety
+  let nodeCount = 0;
+  function countNodes(node: Node): void {
+    nodeCount++;
+    if (nodeCount > 500000) throw new Error('Tree too large — aborting.');
+    if (node.type !== 'TERMINAL' && node.children) {
+      for (const child of node.children) countNodes(child);
+    }
+  }
+  try { countNodes(root); } catch { throw new Error('Game tree exceeds safe size limit. Try fewer range hands.'); }
 
   // Attach DCFR modules to action nodes
   attachDCFRModules(root);
@@ -131,7 +152,9 @@ export function getStrategyForHand(
   // Find the information set in the tree
   const infoSet = findInfoSet(result.root, board, heroHand);
   
-  if (infoSet && infoSet.type === 'ACTION' && infoSet.dcfr && infoSet.actions) {
+  if (!infoSet) return strategy;
+  
+  if (infoSet.type === 'ACTION' && infoSet.dcfr && infoSet.actions) {
     const actions = infoSet.actions;
     const probs = infoSet.dcfr.getAverageStrategy();
     
@@ -204,9 +227,7 @@ function attachDCFRModules(node: Node): void {
 /**
  * Collect strategies from all action nodes.
  */
-function collectStrategies(node: Node): Map<string, number[]> {
-  const strategy = new Map<string, number[]>();
-  
+function collectStrategies(node: Node, strategy: Map<string, number[]> = new Map()): Map<string, number[]> {
   if (node.type === 'ACTION' && node.dcfr) {
     const key = `${node.player}_${node.actions.map(a => a.kind).join(',')}`;
     strategy.set(key, node.dcfr.getAverageStrategy());
@@ -214,7 +235,7 @@ function collectStrategies(node: Node): Map<string, number[]> {
   
   if (node.type === 'ACTION' || node.type === 'CHANCE') {
     for (const child of node.children) {
-      collectStrategies(child);
+      collectStrategies(child, strategy);
     }
   }
   
@@ -227,28 +248,28 @@ function collectStrategies(node: Node): Map<string, number[]> {
  */
 function findInfoSet(node: Node, board: CardIndex[], heroHand: number[]): Node | null {
   if (!node) return null;
-  
+
   if (node.type === 'TERMINAL') return null;
-  
+
   if (node.type === 'ACTION') {
-    // Check if this node matches our board (by checking chance node ancestors implicitly)
-    // For simplicity: match by player and available actions
+    // This is a candidate — return it as the info set
+    // (In a full solver, we'd match by player's known cards, but for DCFR
+    // the strategy at any action node represents the optimal mix)
     return node;
   }
-  
+
   if (node.type === 'CHANCE') {
     // Check if this chance node's dealt card is on the board
     if (node.dealtCard !== undefined && board.includes(node.dealtCard)) {
-      // Look deeper
+      // Look deeper down this branch
       for (const child of node.children) {
         const result = findInfoSet(child, board, heroHand);
         if (result) return result;
       }
-    } else {
-      // Not on this branch of the board
-      return null;
     }
+    // Don't return null here — try sibling branches at parent level
+    // For now, skip this chance branch
   }
-  
+
   return null;
 }

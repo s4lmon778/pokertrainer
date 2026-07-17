@@ -292,11 +292,20 @@ export function applyAction(state: GameState, action: Action, settings: TreeBuil
 
     case 'RAISE': {
       const raiseSize = action.size ?? 1.0;
-      const raiseAmount = Math.min(
-        Math.floor(state.currentBet * (1 + raiseSize)),
-        remainingChips + state.currentBet
-      );
-      const amountToAdd = raiseAmount - state.currentBet;
+      let raiseAmount: number;
+      if (state.currentBet === 0) {
+        // No bet facing yet — treat as a bet (use pot-size multiplier)
+        raiseAmount = Math.max(
+          Math.floor(state.pot * raiseSize),
+          state.minimumBet
+        );
+      } else {
+        raiseAmount = Math.min(
+          Math.floor(state.currentBet * (1 + raiseSize)),
+          remainingChips + state.currentBet
+        );
+      }
+      const amountToAdd = Math.max(raiseAmount - state.currentBet, 0);
       newState.stacks[currentPlayer] -= amountToAdd;
       newState.pot += amountToAdd;
       newState.currentBet = raiseAmount;
