@@ -134,7 +134,9 @@ const TIP_DISPLAY_MS = 10000;
 const MAX_HISTORY = 30;
 
 const CoachTips: React.FC = React.memo(() => {
-  const gameState = useGameStore(s => s.gameState);
+  const gamePhase = useGameStore(s => s.gamePhase);
+  const handNumber = useGameStore(s => s.gameState?.handNumber ?? 0);
+  const isPlaying = useGameStore(s => s.isPlaying);
   const stats = useGameStore(s => s.stats);
   const gameHistory = useGameStore(s => s.gameHistory);
 
@@ -217,11 +219,11 @@ const CoachTips: React.FC = React.memo(() => {
   }, [dismissedIds]);
 
   // Check if a game is active for phase-aware tip selection
-  const hasActiveGame = gameState !== null;
+  const hasActiveGame = isPlaying;
 
   // Pick a context-aware tip
   const pickTip = useCallback(() => {
-    const phase = gameState?.currentPhase || 'preflop';
+    const phase = gamePhase || 'preflop';
     const phaseContext: TipContext = phase === 'preflop' ? 'preflop' :
       phase === 'flop' ? 'flop' :
       phase === 'turn' ? 'turn' :
@@ -272,7 +274,7 @@ const CoachTips: React.FC = React.memo(() => {
       if (rand <= 0) return tip;
     }
     return pool[0];
-  }, [gameState?.currentPhase, activeCategory, dismissedIds, recentBehavior]);
+  }, [gamePhase, activeCategory, dismissedIds, recentBehavior]);
 
   // Record tip in history when shown
   const recordHistory = useCallback((tip: CoachTip) => {
@@ -326,7 +328,7 @@ const CoachTips: React.FC = React.memo(() => {
   // Reset dismissed when hand changes
   useEffect(() => {
     setDismissed(false);
-  }, [gameState?.handNumber]);
+  }, [handNumber]);
 
   const dismissPermanent = useCallback(() => {
     if (currentTip) {

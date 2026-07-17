@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { Card as CardType } from '../types/card';
 import { Trophy, Sparkles, Coins, X } from 'lucide-react';
@@ -11,8 +11,21 @@ const SUIT_SYMBOLS: Record<string, string> = {
 const SUIT_COLORS: Record<string, string> = {
   hearts: '#ef4444', diamonds: '#f97316', clubs: '#1e293b', spades: '#0f172a',
 };
-const SUIT_NAMES: Record<string, string> = {
-  hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs', spades: 'Spades',
+
+// ── Static style objects (module-level to prevent recreation) ──
+const WOOD_GRAIN_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.15) 100%)',
+  border: '3px solid rgba(255,255,255,0.04)',
+  borderRadius: 'inherit',
+  margin: '2px',
+};
+
+const CARD_HIGHLIGHT_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(0,0,0,0.05) 100%)',
+};
+
+const SPOTLIGHT_STYLE: React.CSSProperties = {
+  background: 'radial-gradient(circle, rgba(212,175,55,0.15) 0%, transparent 70%)',
 };
 
 // ── CardDisplay — premium playing card with hover flip ──
@@ -83,10 +96,7 @@ const CardDisplay: React.FC<CardDisplayProps> = React.memo(({
           <span className="text-[0.5em] ml-[1px] align-super">{suitSymbol}</span>
         </div>
         {/* Inner highlight */}
-        <div className="absolute inset-0 rounded-xl pointer-events-none"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(0,0,0,0.05) 100%)',
-          }} />
+        <div className="absolute inset-0 rounded-xl pointer-events-none" style={CARD_HIGHLIGHT_STYLE} />
       </div>
     </div>
   );
@@ -290,9 +300,7 @@ const WinnerOverlay: React.FC<{
 
           {/* Spotlight effect */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none"
-            style={{
-              background: 'radial-gradient(circle, rgba(212,175,55,0.15) 0%, transparent 70%)',
-            }} />
+            style={SPOTLIGHT_STYLE} />
 
           {/* Close button */}
           {onClose && (
@@ -373,17 +381,8 @@ const PlayerBadge: React.FC<{
         <div className="absolute -inset-3 rounded-2xl ring-4 ring-gold/50 animate-pulse-glow pointer-events-none z-0" />
       )}
 
-      {/* Cards */}
-      {showCards && hand.length > 0 && (
-        <div className="flex gap-0.5 mb-1 relative z-10">
-          {hand.map((card, i) => (
-            <CardDisplay key={card.id} card={card} size="md" dealDelay={i * 80} />
-          ))}
-        </div>
-      )}
-
       {/* Player panel */}
-      <div className={`rounded-2xl border-2 p-2.5 min-w-[130px] relative z-10 transition-all duration-300 ${borderColor} ${activeRing} ${folded ? 'opacity-40' : ''}`}>
+      <div className={`rounded-2xl border-2 p-2.5 min-w-[130px] relative z-10 transition-all duration-300 ${borderColor} ${activeRing} ${folded ? 'opacity-40' : ''} ${showCards && hand.length > 0 ? 'pb-1' : ''}`}>
         {/* Active indicator — bigger and more visible */}
         {isActive && (
           <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30">
@@ -407,7 +406,7 @@ const PlayerBadge: React.FC<{
 
         {/* Role badge (D/SB/BB) */}
         {roleBadge && (
-          <div className={`absolute -top-2 -left-2 text-[10px] font-black px-2 py-0.5 rounded-full ring-2 ring-surface-elevated shadow-md z-20 ${roleBadge.color} ${roleBadge.ring}`}>
+          <div className={`absolute -top-2 -right-2 text-[10px] font-black px-2 py-0.5 rounded-full ring-2 ring-surface-elevated shadow-md z-20 ${roleBadge.color} ${roleBadge.ring}`}>
             {roleBadge.label}
           </div>
         )}
@@ -420,7 +419,7 @@ const PlayerBadge: React.FC<{
         )}
 
         {/* Avatar + Name */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pt-1">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-inner ${
             folded ? 'bg-gray-600' :
             isTrainingBot ? 'bg-gradient-to-br from-cyan-400 to-cyan-600 text-white' :
@@ -457,6 +456,15 @@ const PlayerBadge: React.FC<{
         {!folded && chips === 0 && (
           <div className="mt-1 text-center text-[11px] text-accent-red font-bold uppercase tracking-wider animate-pulse">
             {hand.length > 0 ? 'ALL IN' : 'BUST'}
+          </div>
+        )}
+
+        {/* Cards — inside panel, below avatar */}
+        {showCards && hand.length > 0 && (
+          <div className="flex gap-0.5 mt-2 justify-center">
+            {hand.map((card, i) => (
+              <CardDisplay key={card.id} card={card} size="sm" dealDelay={i * 80} />
+            ))}
           </div>
         )}
       </div>
@@ -528,60 +536,68 @@ const PokerTable: React.FC = React.memo(() => {
     };
   }, []);
 
-  if (!gameState) return null;
+  // Memoize derived values to avoid recomputation each render
+  const allBots = useMemo(() => gameState?.players.filter(p => p.isBot) ?? [], [gameState?.players]);
+  const tBot = useMemo(() => allBots.find(p => p.isTrainingBot) ?? null, [allBots]);
+  const arcBots = useMemo(() => autoPlayMode ? allBots.filter(p => !p.isTrainingBot) : allBots, [autoPlayMode, allBots]);
+  const humanPlayer = useMemo(() => gameState?.players.find(p => !p.isBot) ?? null, [gameState?.players]);
+  const humanIdx = useMemo(() => gameState?.players.findIndex(p => !p.isBot) ?? -1, [gameState?.players]);
 
-  const allBots = gameState.players.filter(p => p.isBot);
-  const tBot = allBots.find(p => p.isTrainingBot);
-  const arcBots = autoPlayMode ? allBots.filter(p => !p.isTrainingBot) : allBots;
-  const humanPlayer = gameState.players.find(p => !p.isBot)!;
   const showHuman = !autoPlayMode;
-  const isActivePlayer = showHuman && gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id;
-  const humanIdx = gameState.players.findIndex(p => !p.isBot);
+  const isActivePlayer = showHuman && humanPlayer && gameState ? gameState.players[gameState.currentPlayerIndex]?.id === humanPlayer.id : false;
 
-  const winnerPlayer = gameState.gameOver && gameState.winner
-    ? gameState.players.find(p => p.id === gameState.winner!.playerId)
-    : null;
+  const winnerPlayer = useMemo(() =>
+    gameState?.gameOver && gameState.winner
+      ? gameState.players.find(p => p.id === gameState.winner!.playerId) ?? null
+      : null,
+  [gameState?.gameOver, gameState?.winner, gameState?.players]);
   const isHumanWinner = winnerPlayer?.id === 'human';
 
-  const getRoleBadge = (playerIdx: number) => {
+  const getRoleBadge = useCallback((playerIdx: number) => {
+    if (!gameState) return null;
     if (playerIdx === gameState.dealerPosition) return { label: 'D', color: 'bg-white text-black', ring: 'ring-white/30' };
     if (playerIdx === gameState.sbPosition) return { label: 'SB', color: 'bg-blue-500 text-white', ring: 'ring-blue-400/50' };
     if (playerIdx === gameState.bbPosition) return { label: 'BB', color: 'bg-red-500 text-white', ring: 'ring-red-400/50' };
     return null;
-  };
+  }, [gameState?.dealerPosition, gameState?.sbPosition, gameState?.bbPosition]);
 
   // Track previous community card count for staggered deal animation
   const prevCommunityCountRef = useRef(0);
 
   useEffect(() => {
-    prevCommunityCountRef.current = gameState.communityCards.length;
-  }, [gameState.communityCards.length]);
+    if (gameState) prevCommunityCountRef.current = gameState.communityCards.length;
+  }, [gameState?.communityCards.length]);
 
   // Community card deal delays — staggered per card, only new cards animate
   const communityDelays = useMemo(() => {
+    if (!gameState) return [];
     const prevCount = prevCommunityCountRef.current;
     return gameState.communityCards.map((_, i) => {
-      if (i < prevCount) return 0; // already dealt — no animation
-      const offset = prevCount === 0 ? 0 : 1; // flop starts immediately, later streets have brief delay
+      if (i < prevCount) return 0;
+      const offset = prevCount === 0 ? 0 : 1;
       return (i - prevCount + offset) * 120;
     });
-  }, [gameState.communityCards.length, handKey]);
+  }, [gameState?.communityCards.length, handKey]);
 
+  // Empty community card slots (memoized to avoid Array.from recreation)
+  const emptySlots = useMemo(() => {
+    if (!gameState) return [];
+    return Array.from({ length: Math.max(0, 5 - gameState.communityCards.length) }, (_, i) => i);
+  }, [gameState?.communityCards.length]);
+
+  if (!gameState) return null;
+
+  // Table container style (stable reference)
+  const tableStyle: React.CSSProperties = { aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)', minWidth: '320px' };
 
   return (
-    <div className="relative w-full mx-auto" style={{ aspectRatio: '16/9', maxHeight: 'min(690px, 55dvh)', minWidth: '320px' }} role="region" aria-label="Poker table">
+    <div className="relative w-full mx-auto" style={tableStyle} role="region" aria-label="Poker table">
       {/* ── Table ── */}
       <div className="absolute inset-0 rounded-[42%] bg-wood-rail border-[10px] border-[#2a1f15] shadow-table overflow-hidden">
         {/* Wood rail grain overlay */}
         <div className="absolute inset-0 rounded-[42%] pointer-events-none wood-grain" />
         {/* Wood rail inner highlight */}
-        <div className="absolute inset-0 rounded-[42%] pointer-events-none"
-          style={{
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.15) 100%)',
-            border: '3px solid rgba(255,255,255,0.04)',
-            borderRadius: 'inherit',
-            margin: '2px',
-          }} />
+        <div className="absolute inset-0 rounded-[42%] pointer-events-none" style={WOOD_GRAIN_STYLE} />
 
         {/* Felt base */}
         <div className="absolute inset-3 rounded-[38%] bg-felt-gradient" />
@@ -606,7 +622,7 @@ const PokerTable: React.FC = React.memo(() => {
               flipIn
             />
           ))}
-          {Array.from({ length: 5 - gameState.communityCards.length }).map((_, i) => (
+          {emptySlots.map((i) => (
             <div key={`empty-${i}`}
               className="w-14 h-20 md:w-16 md:h-24 rounded-xl border border-dashed border-white/[0.04] bg-white/[0.015]"
               style={{ opacity: 0.3 + i * 0.1 }} />

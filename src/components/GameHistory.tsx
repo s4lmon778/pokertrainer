@@ -5,6 +5,49 @@ import { TrendingUp, DollarSign, Hash, Clock, ChevronRight, Search, Download, Fi
 type FilterType = 'all' | 'win' | 'loss';
 type SortField = 'handNumber' | 'potSize' | 'botResult' | 'winner' | 'numPlayers';
 
+// ── Module-level helpers (avoid recreation each render) ──
+
+const getRowClass = (entry: { botResult: number }) => {
+  if (entry.botResult > 0) return 'row-win';
+  if (entry.botResult < 0) return 'row-loss';
+  return '';
+};
+
+const ResultDot: React.FC<{ result: number }> = React.memo(({ result }) => {
+  if (result > 0) return <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]" title="Win" />;
+  if (result < 0) return <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]" title="Loss" />;
+  return <div className="w-2 h-2 rounded-full bg-gray-500" title="Break even" />;
+});
+
+ResultDot.displayName = 'ResultDot';
+
+interface SortHeaderProps {
+  field: SortField;
+  label: string;
+  icon?: React.ReactNode;
+  sortField: SortField;
+  sortDir: 'asc' | 'desc';
+  onToggle: (field: SortField) => void;
+}
+
+const SortHeader: React.FC<SortHeaderProps> = React.memo(({ field, label, icon, sortField, sortDir, onToggle }) => {
+  const handleClick = useCallback(() => onToggle(field), [onToggle, field]);
+  return (
+    <button
+      onClick={handleClick}
+      className="flex items-center gap-1 text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold hover:text-text-secondary transition-colors group"
+    >
+      {icon}
+      {label}
+      {sortField === field && (
+        <span className="text-gold text-[8px] ml-0.5">{sortDir === 'asc' ? '▲' : '▼'}</span>
+      )}
+    </button>
+  );
+});
+
+SortHeader.displayName = 'SortHeader';
+
 const GameHistory: React.FC = React.memo(() => {
   const gameHistory = useGameStore(s => s.gameHistory);
   const [filter, setFilter] = useState<FilterType>('all');
@@ -220,33 +263,6 @@ const GameHistory: React.FC = React.memo(() => {
     );
   }
 
-  const SortHeader: React.FC<{ field: SortField; label: string; icon?: React.ReactNode }> = ({ field, label, icon }) => (
-    <button
-      onClick={() => toggleSort(field)}
-      className="flex items-center gap-1 text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold hover:text-text-secondary transition-colors group"
-    >
-      {icon}
-      {label}
-      {sortField === field && (
-        <span className="text-gold text-[8px] ml-0.5">{sortDir === 'asc' ? '▲' : '▼'}</span>
-      )}
-    </button>
-  );
-
-  // Color-coded row class
-  const getRowClass = (entry: { botResult: number }) => {
-    if (entry.botResult > 0) return 'row-win';
-    if (entry.botResult < 0) return 'row-loss';
-    return '';
-  };
-
-  // Result indicator dot
-  const ResultDot: React.FC<{ result: number }> = ({ result }) => {
-    if (result > 0) return <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]" title="Win" />;
-    if (result < 0) return <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]" title="Loss" />;
-    return <div className="w-2 h-2 rounded-full bg-gray-500" title="Break even" />;
-  };
-
   return (
     <div className="space-y-3">
       {/* Summary bar */}
@@ -427,12 +443,12 @@ const GameHistory: React.FC = React.memo(() => {
             <tr>
               <th className="w-8"></th>
               <th className="w-6"></th>
-              <th><SortHeader field="handNumber" label="#" icon={<Hash size={10} />} /></th>
-              <th><SortHeader field="winner" label="Winner" /></th>
+              <th><SortHeader field="handNumber" label="#" icon={<Hash size={10} />} sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
+              <th><SortHeader field="winner" label="Winner" sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
               <th>Hand</th>
-              <th><SortHeader field="potSize" label="Pot" icon={<DollarSign size={10} />} /></th>
-              <th><SortHeader field="botResult" label="Result" /></th>
-              <th><SortHeader field="numPlayers" label="Pl." /></th>
+              <th><SortHeader field="potSize" label="Pot" icon={<DollarSign size={10} />} sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
+              <th><SortHeader field="botResult" label="Result" sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
+              <th><SortHeader field="numPlayers" label="Pl." sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
             </tr>
           </thead>
           <tbody>

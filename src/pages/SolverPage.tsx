@@ -346,20 +346,75 @@ const SolverPage: React.FC = React.memo(() => {
 
       {/* How to Use */}
       <div className="card border-blue-500/15 bg-blue-500/[0.04]">
-        <details className="group">
-          <summary className="flex items-center gap-2 cursor-pointer text-sm font-bold text-text-secondary/60 hover:text-text-primary transition-colors list-none [&::-webkit-details-marker]:hidden">
-            <Info size={14} className="text-blue-400" />
-            How to Use the Solver
-          </summary>
-          <div className="mt-3 space-y-2 text-xs text-text-secondary/60 leading-relaxed">
-            <p><strong className="text-text-primary">1. Select the board</strong> — Click cards below to build the flop (3), turn (4), or river (5) board.</p>
-            <p><strong className="text-text-primary">2. Select hero's hand</strong> — Click 2 cards for your hole cards. The solver shows the strategy for this specific hand.</p>
-            <p><strong className="text-text-primary">3. Choose ranges</strong> — Use presets or the hand matrix to define hero and villain ranges. Default is UTR (top 20%).</p>
-            <p><strong className="text-text-primary">4. Set iterations</strong> — More iterations = more accurate but slower. 200 is a good starting point.</p>
-            <p><strong className="text-text-primary">5. Click Solve</strong> — The solver runs DCFR and displays the strategy breakdown.</p>
-            <p className="text-[10px] text-text-secondary/30">Note: This is a simplified solver for educational purposes. Real solvers (PioSolver, GTO+) use much larger trees and more iterations.</p>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Info size={16} className="text-blue-400" />
+            <h3 className="font-bold text-sm text-text-primary">How to Use the GTO Solver</h3>
           </div>
-        </details>
+          <p className="text-xs text-text-secondary/60 leading-relaxed">
+            The solver computes a Game Theory Optimal (GTO) strategy using Discounted Counterfactual Regret Minimization (DCFR).
+            It tells you the mathematically optimal mix of actions (check, bet, raise, fold, call) for your hand against a known range,
+            assuming both players play optimally. This is for <strong className="text-text-primary">educational purposes</strong> —
+            real solvers like PioSolver or GTO+ use millions of iterations and full tree traversal.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <h4 className="text-[10px] uppercase tracking-wider font-bold text-cyan-400">Step-by-Step</h4>
+              <ol className="space-y-2 text-xs text-text-secondary/70 list-decimal list-inside">
+                <li>
+                  <strong className="text-text-primary">Board:</strong> Click cards to build the community cards. Start with 3 for a flop, add 1 more for turn, 2 for river.
+                  The solver calculates strategy for each street independently based on the board state.
+                </li>
+                <li>
+                  <strong className="text-text-primary">Hero Hand:</strong> Select your 2 hole cards. This is the specific hand the solver will analyze.
+                  The strategy shown is for this exact hand combination against the villain's range.
+                </li>
+                <li>
+                  <strong className="text-text-primary">Ranges:</strong> Define what hands your opponent could have (villain range) and what hands you play (hero range).
+                  Presets give you common opening/calling ranges. The matrix shows all 169 starting hand types — pairs on the diagonal, suited hands above, offsuit below.
+                </li>
+                <li>
+                  <strong className="text-text-primary">Iterations:</strong> Controls solver accuracy. 200 is fast and decent for learning. 500-1000 gives more precise results but takes longer.
+                  More iterations = lower exploitability (closer to true GTO).
+                </li>
+                <li>
+                  <strong className="text-text-primary">Solve:</strong> Runs the algorithm and displays the strategy breakdown for both players.
+                  The results show the probability of each action at each decision point.
+                </li>
+              </ol>
+            </div>
+            <div className="space-y-3">
+              <h4 className="text-[10px] uppercase tracking-wider font-bold text-gold">Understanding Results</h4>
+              <div className="space-y-2 text-xs text-text-secondary/70">
+                <div>
+                  <strong className="text-text-primary">Exploitability:</strong> How far from perfect GTO the solution is. Lower is better — 0 means perfectly optimal.
+                  Expect higher values with fewer iterations or complex board textures.
+                </div>
+                <div>
+                  <strong className="text-text-primary">Hero/Villain Strategy:</strong> Each action (Check, Bet, Raise, Fold, Call) shows the percentage of time you should play it.
+                  A balanced GTO strategy often mixes actions — e.g., bet 60% of the time and check 40%.
+                </div>
+                <div>
+                  <strong className="text-text-primary">Strategy Bars:</strong> Green bars are value/aggressive actions (bets, raises). Cyan are passive (checks, calls). Amber are folds.
+                  The bar length represents the frequency of that action in your optimal mix.
+                </div>
+                <div>
+                  <strong className="text-text-primary">Villain Hand:</strong> Optional — you can select specific villain hole cards to see head-to-head strategy.
+                  Most real-world situations use ranges, not exact cards.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="pt-2 border-t border-white/5">
+            <h4 className="text-[10px] uppercase tracking-wider font-bold text-text-secondary/50 mb-2">Quick Tips</h4>
+            <ul className="space-y-1 text-[11px] text-text-secondary/60">
+              <li>• Try AQs on a K-7-2 rainbow board to see how polarized your betting range should be</li>
+              <li>• Compare preflop open ranges (UTR vs Open vs Wide) to see how position affects strategy</li>
+              <li>• Higher iterations give smoother strategy distributions — use 500+ for serious study</li>
+              <li>• The solver works best with clear range definitions. Vague ranges produce less meaningful results</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       {/* Board Selection */}
@@ -368,9 +423,12 @@ const SolverPage: React.FC = React.memo(() => {
           <h3 className="font-bold text-sm flex items-center gap-2">
             <Eye size={14} className="text-cyan-400" /> Board Cards ({boardCardsFiltered.length}/5)
           </h3>
-          <button onClick={() => setBoardCards([])} className="text-[10px] text-text-secondary/40 hover:text-text-primary transition-colors">
-            Clear
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-text-secondary/30">Community cards dealt during the hand</span>
+            <button onClick={() => setBoardCards([])} className="text-[10px] text-text-secondary/40 hover:text-text-primary transition-colors">
+              Clear
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1.5">
           {ALL_CARDS.map(c => {
@@ -395,9 +453,12 @@ const SolverPage: React.FC = React.memo(() => {
           <h3 className="font-bold text-sm flex items-center gap-2">
             <Eye size={14} className="text-gold" /> Hero Hand ({heroCardsFiltered.length}/2)
           </h3>
-          <button onClick={() => setHeroHand([])} className="text-[10px] text-text-secondary/40 hover:text-text-primary transition-colors">
-            Clear
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-text-secondary/30">Your 2 private hole cards</span>
+            <button onClick={() => setHeroHand([])} className="text-[10px] text-text-secondary/40 hover:text-text-primary transition-colors">
+              Clear
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1.5">
           {ALL_CARDS.map(c => {
@@ -461,7 +522,11 @@ const SolverPage: React.FC = React.memo(() => {
       {/* Ranges */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="card">
-          <h3 className="font-bold text-sm mb-2 text-cyan-400">Hero Range</h3>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-bold text-sm text-cyan-400">Hero Range</h3>
+            <span className="text-[10px] text-text-secondary/30">{heroRange.size} hands selected</span>
+          </div>
+          <p className="text-[10px] text-text-secondary/40 mb-3">Your complete playing range for this position. Presets cover common open-raising frequencies.</p>
           <div className="flex gap-1.5 flex-wrap mb-3">
             {Object.keys(PRESET_RANGES).map(name => (
               <button
@@ -497,7 +562,11 @@ const SolverPage: React.FC = React.memo(() => {
         </div>
 
         <div className="card">
-          <h3 className="font-bold text-sm mb-2 text-purple-400">Villain Range</h3>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-bold text-sm text-purple-400">Villain Range</h3>
+            <span className="text-[10px] text-text-secondary/30">{villainRange.size} hands selected</span>
+          </div>
+          <p className="text-[10px] text-text-secondary/40 mb-3">What hands your opponent could have. In practice, you estimate ranges based on their position and tendencies.</p>
           <div className="flex gap-1.5 flex-wrap mb-3">
             {Object.keys(PRESET_RANGES).map(name => (
               <button
@@ -539,6 +608,7 @@ const SolverPage: React.FC = React.memo(() => {
           <label className="text-xs text-text-secondary/60 font-semibold block mb-1">
             Iterations: <span className="text-cyan-400 font-mono">{iterations}</span>
           </label>
+          <p className="text-[10px] text-text-secondary/40 mb-2">More = more accurate but slower. 200 for quick checks, 500+ for serious study.</p>
           <input
             type="range" min={50} max={1000} step={50} value={iterations}
             onChange={e => setIterations(Number(e.target.value))}
@@ -579,6 +649,10 @@ const SolverPage: React.FC = React.memo(() => {
                 {result.time}ms · {result.result.iterations} iter · Expl: {result.result.exploitability.toFixed(4)}
               </span>
             </div>
+            <p className="text-[10px] text-text-secondary/50 mb-3">
+              This is the optimal strategy mix for the selected hand on this board against the defined ranges.
+              Percentages show how often each action should be played in equilibrium.
+            </p>
             <div className="text-xs text-text-secondary/60 mb-4">
               Board: <span className="font-mono text-text-primary">{boardCardsFiltered.map(cardIndexToString).join(' ')}</span>
               {heroCardsFiltered.length > 0 && (

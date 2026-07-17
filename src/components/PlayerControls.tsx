@@ -62,6 +62,36 @@ const PlayerControls: React.FC = React.memo(() => {
     setTimeout(() => setIsActing(false), 300);
   }, [isActing, playerAct, addLog]);
 
+  // Stable action handlers (avoids inline arrow recreation each render)
+  const handleFold = useCallback(() => doAction('fold', undefined, 'Folded'), [doAction]);
+  const handleCheck = useCallback(() => doAction('check', undefined, 'Checked'), [doAction]);
+  const handleCall = useCallback(() => doAction('call', undefined, 'Called'), [doAction]);
+  const handleRaise = useCallback(() => {
+    const amount = raiseAmount || toCall * 2;
+    doAction('raise', amount, `Raised $${amount.toLocaleString()}`);
+  }, [doAction, raiseAmount, toCall]);
+  const handleAllIn = useCallback(() => {
+    const chips = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
+    doAction('raise', chips, 'ALL IN!');
+  }, [doAction, humanPlayer?.chips, humanPlayer?.bet]);
+
+  // Stable slider handler
+  const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setRaiseAmount(parseInt(e.target.value) || 0);
+  }, []);
+
+  // Stable quick-raise handlers
+  const handleQuickRaise = useCallback((mult: number) => {
+    const minRaise = toCall * 2;
+    const chipTotal = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
+    setRaiseAmount(Math.min(minRaise * mult, chipTotal));
+  }, [toCall, humanPlayer?.chips, humanPlayer?.bet]);
+
+  const handlePotRaise = useCallback(() => {
+    const chipTotal = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
+    setRaiseAmount(Math.min((gameState?.pot ?? 0) + toCall, chipTotal));
+  }, [gameState?.pot, toCall, humanPlayer?.chips, humanPlayer?.bet]);
+
   useEffect(() => {
     if (!gameState || gameState.gameOver) return;
     const handler = (e: KeyboardEvent) => {
@@ -173,7 +203,7 @@ const PlayerControls: React.FC = React.memo(() => {
       <div className="flex gap-2 flex-wrap items-center">
         {/* Fold */}
         <button
-          onClick={() => doAction('fold', undefined, 'Folded')}
+          onClick={handleFold}
           disabled={!!humanPlayer?.folded || !isMyTurn || isActing}
           className="btn-danger flex items-center gap-1.5 text-xs sm:text-sm"
           aria-label="Fold (keyboard shortcut: F)"
@@ -186,7 +216,7 @@ const PlayerControls: React.FC = React.memo(() => {
         {/* Check / Call */}
         {canCheck ? (
           <button
-            onClick={() => doAction('check', undefined, 'Checked')}
+            onClick={handleCheck}
             disabled={!isMyTurn || isActing}
             className="btn-secondary flex items-center gap-1.5"
             aria-label="Check (keyboard shortcut: X)"
@@ -199,7 +229,7 @@ const PlayerControls: React.FC = React.memo(() => {
           </button>
         ) : canCall ? (
           <button
-            onClick={() => doAction('call', undefined, 'Called')}
+            onClick={handleCall}
             disabled={!isMyTurn || isActing}
             className="btn-call flex items-center gap-1.5 text-xs sm:text-sm"
             aria-label={`Call $${toCall} (keyboard shortcut: C)`}
@@ -215,7 +245,7 @@ const PlayerControls: React.FC = React.memo(() => {
         {/* Raise button */}
         {canRaise && isMyTurn && (
           <button
-            onClick={() => doAction('raise', raiseAmount || toCall * 2, `Raised $${(raiseAmount || toCall * 2).toLocaleString()}`)}
+            onClick={handleRaise}
             disabled={!isMyTurn || isActing}
             className="btn-primary flex items-center gap-1.5 text-xs sm:text-sm"
             aria-label={`Raise to $${(raiseAmount || toCall * 2).toLocaleString()} (keyboard shortcut: R)`}
@@ -229,7 +259,7 @@ const PlayerControls: React.FC = React.memo(() => {
         {/* All In */}
         {canRaise && isMyTurn && (
           <button
-            onClick={() => doAction('raise', (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0), 'ALL IN!')}
+            onClick={handleAllIn}
             disabled={!isMyTurn || isActing}
             className="btn-allin flex items-center gap-1.5 text-xs sm:text-sm"
             aria-label="All In (keyboard shortcut: A)"
@@ -242,63 +272,44 @@ const PlayerControls: React.FC = React.memo(() => {
       </div>
 
       {/* Raise slider */}
-      {canRaise && isMyTurn && (() => {
-        const sliderMin = toCall * 2;
-        const sliderMax = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
-        const sliderStep = Math.max(5, gameState.minRaise);
-        const sliderValue = raiseAmount || sliderMin;
-
-        // Hide slider if min >= max (all-in only)
-        if (sliderMin >= sliderMax) return null;
-
-        return (
-          <div className="mt-2 w-full">
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="raise-slider" className="text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold">Raise Amount</label>
-              <output htmlFor="raise-slider" className="text-gold font-mono font-bold text-xs">${sliderValue.toLocaleString()}</output>
-            </div>
-            <input
-              id="raise-slider"
-              type="range"
-              min={sliderMin}
-              max={sliderMax}
-              step={sliderStep}
-              value={sliderValue}
-              onInput={e => setRaiseAmount(parseInt((e.target as HTMLInputElement).value) || 0)}
-              onChange={e => setRaiseAmount(parseInt(e.target.value) || 0)}
-              className="slider-gold"
-              aria-describedby="raise-slider-desc"
-              style={{ '--slider-pct': `${((sliderValue - sliderMin) / (sliderMax - sliderMin)) * 100}%` } as React.CSSProperties}
-            />
-            <div id="raise-slider-desc" className="sr-only">Drag to set raise amount between ${sliderMin.toLocaleString()} and ${sliderMax.toLocaleString()} in increments of ${sliderStep.toLocaleString()}</div>
-            <div className="flex justify-between text-xs mt-0.5">
-              <span className="text-text-secondary/40 font-mono">Min: ${sliderMin.toLocaleString()}</span>
-              <span className="text-text-secondary/40 font-mono">Max: ${sliderMax.toLocaleString()}</span>
-            </div>
+      {canRaise && isMyTurn && toCall * 2 < (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0) && (
+        <div className="mt-2 w-full">
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor="raise-slider" className="text-[10px] text-text-secondary/50 uppercase tracking-wider font-semibold">Raise Amount</label>
+            <output htmlFor="raise-slider" className="text-gold font-mono font-bold text-xs">${(raiseAmount || toCall * 2).toLocaleString()}</output>
           </div>
-        );
-      })()}
+          <input
+            id="raise-slider"
+            type="range"
+            min={toCall * 2}
+            max={(humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0)}
+            step={Math.max(5, gameState.minRaise)}
+            value={raiseAmount || toCall * 2}
+            onChange={handleSliderChange}
+            className="slider-gold"
+            aria-describedby="raise-slider-desc"
+          />
+          <div id="raise-slider-desc" className="sr-only">Drag to set raise amount between ${(toCall * 2).toLocaleString()} and ${((humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0)).toLocaleString()} in increments of ${Math.max(5, gameState.minRaise).toLocaleString()}</div>
+          <div className="flex justify-between text-xs mt-0.5">
+            <span className="text-text-secondary/40 font-mono">Min: ${(toCall * 2).toLocaleString()}</span>
+            <span className="text-text-secondary/40 font-mono">Max: ${((humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0)).toLocaleString()}</span>
+          </div>
+        </div>
+      )}
 
       {/* Quick raise + Action log */}
       <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
         {canRaise && isMyTurn && (
           <div className="flex gap-1.5">
-            {[0.5, 1, 2, 3].map(mult => {
-              const minRaise = toCall * 2;
-              const chipTotal = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
-              return (
-                <button key={mult} onClick={() => setRaiseAmount(Math.min(minRaise * mult, chipTotal))}
-                  aria-label={`${mult}x raise — $${Math.min(minRaise * mult, chipTotal).toLocaleString()}`}
-                  className="text-[11px] px-2.5 py-1 bg-white/5 rounded-lg border border-white/10 text-text-secondary/60 hover:border-gold/40 hover:text-gold transition-all font-mono font-bold active:scale-95">
-                  {mult}x
-                </button>
-              );
-            })}
-            <button onClick={() => {
-              const chipTotal = (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0);
-              setRaiseAmount(Math.min(gameState.pot + toCall, chipTotal));
-            }}
-              aria-label={`Pot-sized raise — $${Math.min(gameState.pot + toCall, (humanPlayer?.chips ?? 0) + (humanPlayer?.bet ?? 0)).toLocaleString()}`}
+            {[0.5, 1, 2, 3].map(mult => (
+              <button key={mult} onClick={() => handleQuickRaise(mult)}
+                aria-label={`${mult}x raise`}
+                className="text-[11px] px-2.5 py-1 bg-white/5 rounded-lg border border-white/10 text-text-secondary/60 hover:border-gold/40 hover:text-gold transition-all font-mono font-bold active:scale-95">
+                {mult}x
+              </button>
+            ))}
+            <button onClick={handlePotRaise}
+              aria-label="Pot-sized raise"
               className="text-[11px] px-2.5 py-1 bg-white/5 rounded-lg border border-white/10 text-text-secondary/60 hover:border-gold/40 hover:text-gold transition-all font-mono font-bold active:scale-95">
               Pot
             </button>

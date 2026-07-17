@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import PokerTable from './components/PokerTable';
 import PlayerControls from './components/PlayerControls';
 import RiskOverlay from './components/RiskOverlay';
@@ -51,12 +51,12 @@ const App: React.FC = () => {
   const addHumanChips = useGameStore(s => s.addHumanChips);
 
   const [rebuyAmount, setRebuyAmount] = useState<number | ''>(100);
-  const handleRebuy = () => {
+  const handleRebuy = useCallback(() => {
     const amt = rebuyAmount === '' ? 0 : rebuyAmount;
     if (amt > 0) {
       addHumanChips(amt);
     }
-  };
+  }, [rebuyAmount, addHumanChips]);
 
   // Initialize monitoring on mount
   useEffect(() => {
@@ -225,14 +225,14 @@ const App: React.FC = () => {
 
   const goToTab = useCallback((tab: Tab) => setActiveTab(tab), []);
 
-  const tabs = [
+  const tabs = useMemo(() => [
     { id: 'play' as Tab, icon: Play, label: 'Play' },
     { id: 'stats' as Tab, icon: BarChart3, label: 'Stats' },
     { id: 'rules' as Tab, icon: BookOpen, label: 'Rules' },
     { id: 'solver' as Tab, icon: Brain, label: 'Solver' },
     { id: 'about' as Tab, icon: Info, label: 'About' },
     { id: 'settings' as Tab, icon: Settings, label: 'Settings' },
-  ];
+  ], []);
 
   const showGame = activeTab === 'play' && isPlaying && gameState;
 
@@ -273,7 +273,7 @@ const App: React.FC = () => {
           {/* Tab Navigation */}
           <nav className="flex gap-0.5 bg-white/5 rounded-xl p-0.5 sm:p-1 border border-white/5 overflow-x-auto scrollbar-none" role="tablist" aria-label="Main navigation">
             {tabs.map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              <button key={tab.id} onClick={() => goToTab(tab.id)}
                 role="tab" aria-selected={activeTab === tab.id}
                 aria-label={`${tab.label} tab`}
                 className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${

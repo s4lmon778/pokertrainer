@@ -1006,7 +1006,7 @@ export const useGameStore = create<GameStore>()(
         selectedBotPersonality: state.selectedBotPersonality,
         tableSize: state.tableSize, buyIn: state.buyIn, blinds: { ...state.blinds },
         autoPlaySpeed: state.autoPlaySpeed,
-        isPlaying: state.isPlaying, gameState: state.gameState,
+        isPlaying: state.isPlaying,
         trainingBotSettings: { ...state.trainingBotSettings },
         botSettings: { ...state.botSettings },
         opponentPersonality: state.opponentPersonality,

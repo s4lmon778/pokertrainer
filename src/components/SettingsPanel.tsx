@@ -4,6 +4,51 @@ import type { BotPersonality, BotSettings } from '../utils/botEngine';
 import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye, Save, FolderOpen, CheckCircle, Database, FileJson, Lightbulb } from 'lucide-react';
 import { exportData, importData, type ImportResult, restoreAutoBackup, getAutoBackupAge, checkStorageUsage } from '../utils/backup';
 
+// ── Slider sub-component (module-level to avoid recreation) ──
+
+const SliderControl: React.FC<{
+  label: string;
+  icon: React.ReactNode;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+  colorClass?: string;
+  onChange: (value: number) => void;
+}> = React.memo(({ label, icon, value, min, max, step = 1, unit = '%', colorClass = 'slider-cyan', onChange }) => {
+  const pct = ((value - min) / (max - min)) * 100;
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(parseFloat(e.target.value));
+  }, [onChange]);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-text-secondary flex items-center gap-1">{icon}{label}</span>
+        <span className="text-cyan-400 font-mono text-xs font-bold">{value.toFixed(0)}{unit}</span>
+      </div>
+      <div className="relative">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={handleChange}
+          className={colorClass}
+          style={{ '--slider-pct': `${pct}%` } as React.CSSProperties}
+        />
+        <div className="flex justify-between px-[2px] mt-0.5">
+          <span className="text-[9px] text-text-secondary/30 font-mono">{min}{unit}</span>
+          <span className="text-[9px] text-text-secondary/30 font-mono">{max}{unit}</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+SliderControl.displayName = 'SliderControl';
+
 const SettingsPanel: React.FC = React.memo(() => {
   const trainingBotSettings = useGameStore(s => s.trainingBotSettings);
   const botSettings = useGameStore(s => s.botSettings);
@@ -80,46 +125,6 @@ const SettingsPanel: React.FC = React.memo(() => {
   const handleTrainingChange = useCallback((key: keyof BotSettings, value: number | string) => {
     updateTrainingBotSettings({ [key]: value as never });
   }, [updateTrainingBotSettings]);
-
-  // ── Slider sub-component ──
-  const SliderControl: React.FC<{
-    label: string;
-    icon: React.ReactNode;
-    value: number;
-    min: number;
-    max: number;
-    step?: number;
-    unit?: string;
-    colorClass?: string;
-    onChange: (value: number) => void;
-  }> = ({ label, icon, value, min, max, step = 1, unit = '%', colorClass = 'slider-cyan', onChange }) => {
-    const pct = ((value - min) / (max - min)) * 100;
-    return (
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-text-secondary flex items-center gap-1">{icon}{label}</span>
-          <span className="text-cyan-400 font-mono text-xs font-bold">{value.toFixed(0)}{unit}</span>
-        </div>
-        <div className="relative">
-          <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onChange={e => onChange(parseFloat(e.target.value))}
-            className={colorClass}
-            style={{ '--slider-pct': `${pct}%` } as React.CSSProperties}
-          />
-          {/* Tick marks */}
-          <div className="flex justify-between px-[2px] mt-0.5">
-            <span className="text-[9px] text-text-secondary/30 font-mono">{min}{unit}</span>
-            <span className="text-[9px] text-text-secondary/30 font-mono">{max}{unit}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-4">
