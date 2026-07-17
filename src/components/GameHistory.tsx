@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { TrendingUp, DollarSign, Hash, Clock, ChevronRight, Search, Download, Filter, ArrowUpDown, FileText, BarChart3 } from 'lucide-react';
+import { TrendingUp, DollarSign, Hash, Clock, ChevronRight, Search, Download, Filter, ArrowUpDown, FileText, BarChart3, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 type FilterType = 'all' | 'win' | 'loss';
 type SortField = 'handNumber' | 'potSize' | 'botResult' | 'winner' | 'numPlayers';
@@ -13,6 +13,10 @@ const GameHistory: React.FC = React.memo(() => {
   const [expandedHand, setExpandedHand] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Pagination
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const toggleSort = useCallback((field: SortField) => {
     setSortField(prev => {
@@ -60,6 +64,12 @@ const GameHistory: React.FC = React.memo(() => {
 
     return entries;
   }, [gameHistory, filter, sortField, sortDir, searchQuery]);
+
+  // Reset to page 1 when filtered results change
+  useEffect(() => { setCurrentPage(1); }, [filteredHistory.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / PAGE_SIZE));
+  const paginatedHistory = filteredHistory.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // CSV export
   const exportHistoryCSV = useCallback(() => {
@@ -426,7 +436,7 @@ const GameHistory: React.FC = React.memo(() => {
             </tr>
           </thead>
           <tbody>
-            {filteredHistory.map((entry) => {
+            {paginatedHistory.map((entry) => {
               const rowClass = getRowClass(entry);
               const isExpanded = expandedHand === entry.handNumber;
               return (
@@ -536,6 +546,64 @@ const GameHistory: React.FC = React.memo(() => {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {filteredHistory.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between gap-2 px-1 py-2">
+          <span className="text-[10px] text-text-secondary/40">
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredHistory.length)} of {filteredHistory.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-text-secondary/50 hover:text-text-primary hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={12} />
+            </button>
+            {(() => {
+              const pages: (number | string)[] = [];
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (currentPage > 3) pages.push('…');
+                const start = Math.max(2, currentPage - 1);
+                const end = Math.min(totalPages - 1, currentPage + 1);
+                for (let i = start; i <= end; i++) pages.push(i);
+                if (currentPage < totalPages - 2) pages.push('…');
+                pages.push(totalPages);
+              }
+              return pages.map((p, i) =>
+                typeof p === 'string' ? (
+                  <span key={`e${i}`} className="w-7 text-center text-text-secondary/30 text-xs">…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                      p === currentPage
+                        ? 'bg-gold text-black shadow-md'
+                        : 'bg-white/5 border border-white/10 text-text-secondary/50 hover:text-text-primary hover:border-white/20'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              );
+            })()}
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-text-secondary/50 hover:text-text-primary hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              aria-label="Next page"
+            >
+              <ChevronRightIcon size={12} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {filteredHistory.length === 0 && (
         <div className="text-center py-4 text-text-secondary/40 text-xs">

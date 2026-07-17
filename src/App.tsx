@@ -9,12 +9,13 @@ import ErrorBoundary from './components/ErrorBoundary';
 import TrainingBotSettings from './components/TrainingBotSettings';
 import { useGameStore } from './store/gameStore';
 import { initMonitoring, addBreadcrumb, reportWebVitals } from './utils/monitoring';
-import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle, Loader2 } from 'lucide-react';
+import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle, Loader2, RefreshCw } from 'lucide-react';
 
 // Code-split heavy components for faster initial load
 const StatsDashboard = lazy(() => import('./components/StatsDashboard'));
 const RulesPage = lazy(() => import('./components/RulesPage'));
 const AboutPage = lazy(() => import('./components/AboutPage'));
+const SolverPage = lazy(() => import('./pages/SolverPage'));
 
 /** Loading fallback for lazy components */
 const LazyFallback: React.FC = () => (
@@ -26,7 +27,7 @@ const LazyFallback: React.FC = () => (
   </div>
 );
 
-type Tab = 'play' | 'stats' | 'rules' | 'about' | 'settings' | 'training';
+type Tab = 'play' | 'stats' | 'rules' | 'solver' | 'about' | 'settings' | 'training';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('play');
@@ -43,6 +44,8 @@ const App: React.FC = () => {
   const startingBankroll = useGameStore(s => s.startingBankroll);
   const autoPlayMode = useGameStore(s => s.autoPlayMode);
   const toggleAutoPlayMode = useGameStore(s => s.toggleAutoPlayMode);
+  const autoRefillChips = useGameStore(s => s.autoRefillChips);
+  const toggleAutoRefillChips = useGameStore(s => s.toggleAutoRefillChips);
   const tbotActivity = useGameStore(s => s.tbotActivity);
   const quitGame = useGameStore(s => s.quitGame);
   const addHumanChips = useGameStore(s => s.addHumanChips);
@@ -226,6 +229,7 @@ const App: React.FC = () => {
     { id: 'play' as Tab, icon: Play, label: 'Play' },
     { id: 'stats' as Tab, icon: BarChart3, label: 'Stats' },
     { id: 'rules' as Tab, icon: BookOpen, label: 'Rules' },
+    { id: 'solver' as Tab, icon: Brain, label: 'Solver' },
     { id: 'about' as Tab, icon: Info, label: 'About' },
     { id: 'settings' as Tab, icon: Settings, label: 'Settings' },
   ];
@@ -316,6 +320,16 @@ const App: React.FC = () => {
               >
                 <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${autoPlayMode ? 'bg-white animate-pulse' : 'bg-text-secondary/30'}`} aria-hidden="true" />
                 AUTO
+              </button>
+              <button
+                onClick={toggleAutoRefillChips}
+                aria-label={autoRefillChips ? 'Disable auto-refill chips' : 'Enable auto-refill chips'}
+                className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
+                  autoRefillChips ? 'bg-emerald-500 text-white' : 'bg-white/10 text-text-secondary/50 hover:text-text-primary'
+                }`}
+              >
+                <RefreshCw size={10} />
+                <span className="hidden sm:inline">REFILL</span>
               </button>
               <button
                 onClick={() => setShowShortcuts(true)}
@@ -416,6 +430,15 @@ const App: React.FC = () => {
             <ErrorBoundary>
               <Suspense fallback={<LazyFallback />}>
                 <RulesPage />
+              </Suspense>
+            </ErrorBoundary>
+          </section>
+        )}
+        {activeTab === 'solver' && (
+          <section role="region" aria-label="GTO Solver">
+            <ErrorBoundary>
+              <Suspense fallback={<LazyFallback />}>
+                <SolverPage />
               </Suspense>
             </ErrorBoundary>
           </section>

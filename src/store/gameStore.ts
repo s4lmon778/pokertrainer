@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { GameState, Player, GamePhase, Card as CardType, SidePot } from '../types/card';
 import { createDeck, shuffleDeck } from '../utils/deck';
 import { evaluateHand } from '../utils/handEvaluator';
-import { botDecision, type BotSettings, createBotSettings, createOpponentSettings, type BotPersonality } from '../utils/botEngine';
+import { botDecision, type BotSettings, createBotSettings, createOpponentSettings, type BotPersonality, type OpponentStats } from '../utils/botEngine';
 import { calculateSidePots } from '../utils/sidePot';
 import { DEFAULT_TRAINING_CONFIG, type TrainingBotConfig } from '../engine/trainingBot';
 
@@ -104,9 +104,11 @@ interface GameStore {
   showTableTalk: boolean;
   showCardsAtEnd: boolean;
   autoPlayMode: boolean;
+  autoRefillChips: boolean;
   tbotActivity: { action: string; amount?: number; confidence: number; reasoning: string; isBluff: boolean; isAllIn?: boolean; timestamp: number } | null;
   botEvaluations: BotEvaluationEntry[];
   autoPlaySpeed: number;
+  sessionOpponentStats: OpponentStats;
 
   initializeGame: () => void;
   startHand: () => void;
@@ -131,6 +133,7 @@ interface GameStore {
   toggleTableTalk: () => void;
   toggleShowCardsAtEnd: () => void;
   toggleAutoPlayMode: () => void;
+  toggleAutoRefillChips: () => void;
   resetStats: () => void;
   nextHand: () => void;
   quitGame: () => void;
@@ -209,9 +212,11 @@ export const useGameStore = create<GameStore>()(
       showTableTalk: false,
       showCardsAtEnd: true,
       autoPlayMode: false,
+      autoRefillChips: false,
       tbotActivity: null,
       botEvaluations: [],
       autoPlaySpeed: 400,
+      sessionOpponentStats: { totalActions: 0, folds: 0, calls: 0, raises: 0 },
 
       // ── Initialize game ──
       initializeGame: () => {
@@ -233,6 +238,7 @@ export const useGameStore = create<GameStore>()(
             sbPosition: 1, bbPosition: 2, preflopRaised: false,
           },
           isPlaying: true, gamePhase: 'preflop',
+          sessionOpponentStats: { totalActions: 0, folds: 0, calls: 0, raises: 0 },
         });
       },
 
@@ -241,9 +247,16 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         if (!state.gameState) return;
         const deck = shuffleDeck(createDeck());
-        const { blinds, gameState } = state;
+        const { blinds, gameState, autoRefillChips, buyIn } = state;
 
         const players: Player[] = gameState.players.map(resetForNewHand);
+
+        // Auto-refill busted players
+        if (autoRefillChips) {
+          for (const p of players) {
+            if (p.chips <= 0) p.chips = buyIn;
+          }
+        }
 
         // Helper: find next player with chips > 0, starting from startIdx, wrapping
         const nextWithChips = (arr: Player[], startIdx: number): number => {
@@ -380,8 +393,9 @@ export const useGameStore = create<GameStore>()(
         if (player.folded || player.chips <= 0) return;
 
         const isAutoHuman = !player.isBot && state.autoPlayMode;
-        const settings = (player.isTrainingBot || isAutoHuman) ? state.trainingBotSettings : state.botSettings;
-        const decision = botDecision(gs, player, settings);
+        const isTraining = player.isTrainingBot || isAutoHuman;
+        const settings = isTraining ? state.trainingBotSettings : state.botSettings;
+        const decision = botDecision(gs, player, settings, isTraining ? state.sessionOpponentStats : undefined);
 
         const players = gs.players.map(p => ({ ...p }));
         const cur = { ...players[pIdx] };
@@ -396,7 +410,7 @@ export const useGameStore = create<GameStore>()(
           case 'check':
             break;
           case 'call': {
-            const callAmt = Math.min(gs.currentBet - cur.bet, cur.chips);
+            const callAmt = Math.min(Math.round(gs.currentBet - cur.bet), cur.chips);
             if (callAmt > 0) {
               cur.chips -= callAmt;
               cur.bet += callAmt;
@@ -407,9 +421,9 @@ export const useGameStore = create<GameStore>()(
             break;
           }
           case 'raise': {
-            // Enforce minimum raise
+            // Enforce minimum raise (integers)
             const minTotal = gs.currentBet + Math.max(gs.minRaise, gs.lastRaiseAmount || gs.minRaise);
-            const raiseTotal = Math.max(decision.amount || minTotal, minTotal);
+            const raiseTotal = Math.round(Math.max(decision.amount || minTotal, minTotal));
             const toAdd = Math.min(raiseTotal - cur.bet, cur.chips);
             if (toAdd > 0) {
               cur.chips -= toAdd;
@@ -447,7 +461,6 @@ export const useGameStore = create<GameStore>()(
         if (decision.isBluff) actionLabel += ' (bluff!)';
 
         const newPot = gs.pot + Math.max(0, cur.totalBetThisRound - (gs.players[pIdx].totalBetThisRound));
-        const isTraining = player.isTrainingBot || isAutoHuman;
         const tbotUpdate = isTraining ? {
           tbotActivity: {
             action: decision.action, amount: decision.amount,
@@ -455,6 +468,17 @@ export const useGameStore = create<GameStore>()(
             isBluff: decision.isBluff, isAllIn, timestamp: Date.now(),
           } as GameStore['tbotActivity'],
         } : {};
+
+        // Track opponent actions for learning rate adaptation
+        let sessionOpponentStats = state.sessionOpponentStats;
+        if (!isTraining) {
+          sessionOpponentStats = {
+            totalActions: sessionOpponentStats.totalActions + 1,
+            folds: sessionOpponentStats.folds + (decision.action === 'fold' ? 1 : 0),
+            calls: sessionOpponentStats.calls + (decision.action === 'call' || decision.action === 'check' ? 1 : 0),
+            raises: sessionOpponentStats.raises + (decision.action === 'raise' ? 1 : 0),
+          };
+        }
 
         set({
           gameState: {
@@ -466,6 +490,7 @@ export const useGameStore = create<GameStore>()(
             lastAction: `${cur.name} ${actionLabel}`,
           },
           ...tbotUpdate,
+          sessionOpponentStats,
         });
       },
 
@@ -492,7 +517,7 @@ export const useGameStore = create<GameStore>()(
             get().advanceTurn();
             return;
           case 'call': {
-            const callAmt = Math.min(gs.currentBet - human.bet, human.chips);
+            const callAmt = Math.min(Math.round(gs.currentBet - human.bet), human.chips);
             if (callAmt <= 0) {
               human.actedThisRound = true;
               players[hIdx] = human;
@@ -509,7 +534,7 @@ export const useGameStore = create<GameStore>()(
           }
           case 'raise': {
             const minTotal = gs.currentBet + Math.max(gs.minRaise, gs.lastRaiseAmount || gs.minRaise);
-            const raiseTotal = Math.max(amount || minTotal, minTotal);
+            const raiseTotal = Math.round(Math.max(amount || minTotal, minTotal));
             const toAdd = Math.min(raiseTotal - human.bet, human.chips);
             if (toAdd <= 0) {
               human.actedThisRound = true;
@@ -739,7 +764,7 @@ export const useGameStore = create<GameStore>()(
       endHand: (winnerId: string, potDistribution?: Record<string, number>) => {
         const state = get();
         if (!state.gameState) return;
-        const { gameState, stats, currentBankroll } = state;
+        const { gameState, stats, currentBankroll, autoPlayMode } = state;
         const dist = potDistribution || { [winnerId]: gameState.pot };
 
         // Distribute chips
@@ -749,50 +774,70 @@ export const useGameStore = create<GameStore>()(
           if (idx !== -1 && amt > 0) players[idx].chips += amt;
         }
 
-        // Human bankroll tracking
+        // In auto-play mode: T-Bot is playing as human, so track T-Bot stats only.
+        // Human stats remain untouched.
+        // In manual mode: human is playing, track human stats only.
+        // T-Bot stats remain untouched.
+        const isAuto = autoPlayMode;
+
+        // Human bankroll tracking (manual mode only)
         const humanPlayer = players.find(p => p.id === 'human');
         const humanHandBet = humanPlayer?.totalHandBet || 0;
         const humanWon = dist['human'] || 0;
         const humanNet = humanWon - humanHandBet;
         const isHumanWinner = humanNet > 0;
-        const newBankroll = currentBankroll + humanNet;
+        const newBankroll = currentBankroll + (isAuto ? 0 : humanNet);
 
-        const newTotalHands = stats.totalHands + 1;
-        const newAvgPot = stats.totalHands === 0
-          ? gameState.pot : (stats.avgPotSize * stats.totalHands + gameState.pot) / newTotalHands;
-        const newWinRate = ((stats.totalWon + (isHumanWinner ? 1 : 0)) / newTotalHands) * 100;
-        const newROI = ((newBankroll - state.startingBankroll) / state.startingBankroll) * 100;
-
-        const newStats: Stats = {
-          ...stats,
-          totalHands: newTotalHands,
-          totalWon: stats.totalWon + (isHumanWinner ? 1 : 0),
-          totalLost: stats.totalLost + (isHumanWinner ? 0 : 1),
-          biggestWin: Math.max(stats.biggestWin, isHumanWinner ? humanNet : 0),
-          biggestLoss: Math.min(stats.biggestLoss, isHumanWinner ? 0 : humanNet),
-          avgPotSize: newAvgPot,
-          botSessions: stats.botSessions + 1,
-          botWins: stats.botWins + (isHumanWinner ? 0 : 1),
-          botLosses: stats.botLosses + (isHumanWinner ? 1 : 0),
-          winRate: newWinRate, roi: newROI,
-          bankrollHistory: [...stats.bankrollHistory, newBankroll],
-        };
-
-        // T-Bot tracking
+        // T-Bot bankroll tracking (auto-play mode only)
         const tbot = players.find(p => p.id === 'training-bot');
         const tbotHandBet = tbot?.totalHandBet || 0;
         const tbotWon = dist['training-bot'] || 0;
-        const tbotProfit = tbotWon - tbotHandBet;
+        const tbotNet = tbotWon - tbotHandBet;
+        const isTbotWinner = tbotNet > 0;
+
+        const newTotalHands = isAuto ? stats.totalHands : stats.totalHands + 1;
+        const newAvgPot = isAuto
+          ? stats.avgPotSize
+          : (stats.totalHands === 0
+            ? gameState.pot
+            : (stats.avgPotSize * stats.totalHands + gameState.pot) / (stats.totalHands + 1));
+        const newWinRate = isAuto
+          ? stats.winRate
+          : ((stats.totalWon + (isHumanWinner ? 1 : 0)) / (stats.totalHands + 1)) * 100;
+        const newROI = isAuto
+          ? ((currentBankroll - state.startingBankroll) / state.startingBankroll) * 100
+          : ((newBankroll - state.startingBankroll) / state.startingBankroll) * 100;
+
+        const newStats: Stats = isAuto
+          ? { ...stats }
+          : {
+              ...stats,
+              totalHands: newTotalHands,
+              totalWon: stats.totalWon + (isHumanWinner ? 1 : 0),
+              totalLost: stats.totalLost + (isHumanWinner ? 0 : 1),
+              biggestWin: Math.max(stats.biggestWin, isHumanWinner ? humanNet : 0),
+              biggestLoss: Math.min(stats.biggestLoss, isHumanWinner ? 0 : humanNet),
+              avgPotSize: newAvgPot,
+              botSessions: stats.botSessions + 1,
+              botWins: stats.botWins + (isHumanWinner ? 0 : 1),
+              botLosses: stats.botLosses + (isHumanWinner ? 1 : 0),
+              winRate: newWinRate, roi: newROI,
+              bankrollHistory: [...stats.bankrollHistory, newBankroll],
+            };
+
+        // T-Bot tracking
         const prevTbot = state.tbotStats;
-        const newTbotHands = prevTbot.handsPlayed + 1;
-        const newTbotStats: TBotStats = {
-          handsPlayed: newTbotHands,
-          handsWon: prevTbot.handsWon + (tbotProfit > 0 ? 1 : 0),
-          handsLost: prevTbot.handsLost + (tbotProfit > 0 ? 0 : 1),
-          winRate: ((prevTbot.handsWon + (tbotProfit > 0 ? 1 : 0)) / newTbotHands) * 100,
-          totalProfit: prevTbot.totalProfit + tbotProfit,
-          bankrollHistory: [...prevTbot.bankrollHistory, prevTbot.totalProfit + tbotProfit],
-        };
+        const newTbotHands = isAuto ? prevTbot.handsPlayed + 1 : prevTbot.handsPlayed;
+        const newTbotStats: TBotStats = isAuto
+          ? {
+              handsPlayed: newTbotHands,
+              handsWon: prevTbot.handsWon + (isTbotWinner ? 1 : 0),
+              handsLost: prevTbot.handsLost + (isTbotWinner ? 0 : 1),
+              winRate: (prevTbot.handsWon + (isTbotWinner ? 1 : 0)) / newTbotHands * 100,
+              totalProfit: prevTbot.totalProfit + tbotNet,
+              bankrollHistory: [...prevTbot.bankrollHistory, prevTbot.totalProfit + tbotNet],
+            }
+          : { ...prevTbot };
 
         // Determine human position name
         const humanIdx = players.findIndex(p => p.id === 'human');
@@ -844,36 +889,46 @@ export const useGameStore = create<GameStore>()(
           }
         }
 
-        // Update position stats
+        // Update position stats (human only)
         const prevPosStats = stats.positionStats || {};
-        const posEntry = prevPosStats[humanPositionName] || { hands: 0, wins: 0, netProfit: 0 };
-        const newPosStats = {
-          ...prevPosStats,
-          [humanPositionName]: {
-            hands: posEntry.hands + 1,
-            wins: posEntry.wins + (isHumanWinner ? 1 : 0),
-            netProfit: posEntry.netProfit + humanNet,
-          },
-        };
+        const newPosStats = isAuto
+          ? prevPosStats
+          : (() => {
+              const posEntry = prevPosStats[humanPositionName] || { hands: 0, wins: 0, netProfit: 0 };
+              return {
+                ...prevPosStats,
+                [humanPositionName]: {
+                  hands: posEntry.hands + 1,
+                  wins: posEntry.wins + (isHumanWinner ? 1 : 0),
+                  netProfit: posEntry.netProfit + humanNet,
+                },
+              };
+            })();
 
-        // Update hand strength stats
+        // Update hand strength stats (human only)
         const prevHsStats = stats.handStrengthStats || {};
-        const hsEntry = prevHsStats[handCategory] || { hands: 0, wins: 0 };
-        const newHsStats = {
-          ...prevHsStats,
-          [handCategory]: {
-            hands: hsEntry.hands + 1,
-            wins: hsEntry.wins + (isHumanWinner ? 1 : 0),
-          },
-        };
+        const newHsStats = isAuto
+          ? prevHsStats
+          : (() => {
+              const hsEntry = prevHsStats[handCategory] || { hands: 0, wins: 0 };
+              return {
+                ...prevHsStats,
+                [handCategory]: {
+                  hands: hsEntry.hands + 1,
+                  wins: hsEntry.wins + (isHumanWinner ? 1 : 0),
+                },
+              };
+            })();
 
-        // Track bluff from tbotActivity
+        // Track bluff from tbotActivity (human only)
         let bluffsThisHand = 0;
         let bluffSuccessThisHand = 0;
-        const tbotAct = state.tbotActivity;
-        if (tbotAct && tbotAct.isBluff) {
-          bluffsThisHand = 1;
-          if (tbotProfit > 0) bluffSuccessThisHand = 1;
+        if (!isAuto) {
+          const tbotAct = state.tbotActivity;
+          if (tbotAct && tbotAct.isBluff) {
+            bluffsThisHand = 1;
+            if (tbotNet > 0) bluffSuccessThisHand = 1;
+          }
         }
 
         const historyEntry: GameHistoryEntry = {
@@ -918,6 +973,7 @@ export const useGameStore = create<GameStore>()(
       toggleTableTalk: () => set(s => ({ showTableTalk: !s.showTableTalk })),
       toggleShowCardsAtEnd: () => set(s => ({ showCardsAtEnd: !s.showCardsAtEnd })),
       toggleAutoPlayMode: () => set(s => ({ autoPlayMode: !s.autoPlayMode })),
+      toggleAutoRefillChips: () => set(s => ({ autoRefillChips: !s.autoRefillChips })),
       resetStats: () => set({ stats: { ...DEFAULT_STATS }, currentBankroll: get().startingBankroll, gameHistory: [], botEvaluations: [] }),
       nextHand: () => {
         const st = get();
@@ -954,6 +1010,7 @@ export const useGameStore = create<GameStore>()(
         trainingBotSettings: { ...state.trainingBotSettings },
         botSettings: { ...state.botSettings },
         opponentPersonality: state.opponentPersonality,
+        sessionOpponentStats: state.sessionOpponentStats,
       }),
     }
   )

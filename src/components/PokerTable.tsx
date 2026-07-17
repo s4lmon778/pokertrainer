@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { Card as CardType } from '../types/card';
-import { Trophy, Sparkles, Coins } from 'lucide-react';
+import { Trophy, Sparkles, Coins, X } from 'lucide-react';
 
 // ── Suit symbols & colors ──
 
@@ -220,7 +220,8 @@ const WinnerOverlay: React.FC<{
   isHuman: boolean;
   handDesc: string;
   pot: number;
-}> = React.memo(({ winnerName, isHuman, handDesc, pot }) => {
+  onClose?: () => void;
+}> = React.memo(({ winnerName, isHuman, handDesc, pot, onClose }) => {
   const particles = useMemo(() =>
     Array.from({ length: 40 }, (_, i) => ({
       id: i,
@@ -282,7 +283,7 @@ const WinnerOverlay: React.FC<{
       ))}
 
       {/* Trophy card */}
-      <div className="animate-celebrate pointer-events-auto">
+      <div className="animate-celebrate pointer-events-auto relative">
         <div className="bg-black/70 backdrop-blur-xl rounded-2xl border-2 border-gold/50 px-6 py-4 text-center space-y-1.5 relative overflow-hidden shadow-gold-xl">
           {/* Shimmer background */}
           <div className="absolute inset-0 bg-winner-shimmer pointer-events-none" />
@@ -292,6 +293,17 @@ const WinnerOverlay: React.FC<{
             style={{
               background: 'radial-gradient(circle, rgba(212,175,55,0.15) 0%, transparent 70%)',
             }} />
+
+          {/* Close button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="absolute top-2 right-2 z-20 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors border border-white/10"
+              aria-label="Dismiss winner overlay"
+            >
+              <X size={12} className="text-white/60" />
+            </button>
+          )}
 
           <Trophy size={40} className="text-gold mx-auto relative z-10 drop-shadow-lg" />
           <div className="relative z-10">
@@ -494,12 +506,14 @@ const PokerTable: React.FC = React.memo(() => {
   const gamePhase = useGameStore(s => s.gamePhase);
   const showCardsAtEnd = useGameStore(s => s.showCardsAtEnd);
   const [handKey, setHandKey] = useState(0);
+  const [winnerDismissed, setWinnerDismissed] = useState(false);
   const prevHandRef = React.useRef(gameState?.handNumber ?? 0);
 
   // Track hand changes for animation reset
   useEffect(() => {
     if (gameState && gameState.handNumber !== prevHandRef.current) {
       setHandKey(k => k + 1);
+      setWinnerDismissed(false);
       prevHandRef.current = gameState.handNumber;
     }
   }, [gameState?.handNumber]);
@@ -509,8 +523,8 @@ const PokerTable: React.FC = React.memo(() => {
     const endAngle = Math.PI * 0.55;
     const angle = startAngle + (index / Math.max(total - 1, 1)) * (endAngle - startAngle);
     return {
-      x: 50 + 37 * Math.cos(angle - Math.PI / 2),
-      y: 50 + 35 * Math.sin(angle - Math.PI / 2),
+      x: 50 + 40 * Math.cos(angle - Math.PI / 2),
+      y: 50 + 38 * Math.sin(angle - Math.PI / 2),
     };
   }, []);
 
@@ -650,12 +664,13 @@ const PokerTable: React.FC = React.memo(() => {
         )}
 
         {/* ── Winner overlay ── */}
-        {winnerPlayer && (
+        {winnerPlayer && !winnerDismissed && (
           <WinnerOverlay
             winnerName={winnerPlayer.name}
             isHuman={isHumanWinner || false}
             handDesc={gameState.winner?.hand.description || ''}
             pot={gameState.pot}
+            onClose={() => setWinnerDismissed(true)}
           />
         )}
 
@@ -739,7 +754,7 @@ const PokerTable: React.FC = React.memo(() => {
 
           return (
             <div key={player.id}
-              className="absolute z-20 transition-all duration-300 flex flex-col items-center gap-0.5"
+              className="absolute z-25 transition-all duration-300 flex flex-col items-center gap-0.5"
               style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}>
               <PlayerBadge
                 playerName={player.name}

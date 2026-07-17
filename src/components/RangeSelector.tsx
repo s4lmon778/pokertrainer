@@ -112,9 +112,17 @@ export const RangeSelector: React.FC<RangeSelectorProps> = ({
       
       {/* Hand Matrix */}
       <div className="hand-matrix">
-        <div className="grid grid-cols-14 gap-0.5 text-[8px]">
+        <div className="grid grid-cols-[1.5rem_repeat(13,1fr)] gap-0.5 text-[8px]">
+          {/* Corner cell */}
+          <div />
+          {/* Column headers */}
+          {RANKS.map((r2: string) => (
+            <div key={`col-${r2}`} className="text-center font-bold text-gray-400">{r2}</div>
+          ))}
+          {/* Rows */}
           {RANKS.map((r1: string, i: number) => (
             <React.Fragment key={r1}>
+              {/* Row header */}
               <div className="text-center font-bold text-gray-400">{r1}</div>
               {RANKS.map((r2: string, j: number) => {
                 const isPair = i === j;

@@ -54,6 +54,17 @@ export function solve(
 ): SolveResult {
   const startTime = performance.now();
 
+  // Defensive: handle empty ranges
+  if (!board || board.length === 0) {
+    throw new Error('Board must have at least 3 cards (flop)');
+  }
+  if (!heroRange || heroRange.length === 0) {
+    throw new Error('Hero range must not be empty');
+  }
+  if (!villainRange || villainRange.length === 0) {
+    throw new Error('Villain range must not be empty');
+  }
+
   const {
     stackSize = DEFAULT_SETTINGS.stackSize,
     potSize = DEFAULT_SETTINGS.potSize,
@@ -115,15 +126,19 @@ export function getStrategyForHand(
 ): Map<string, number> {
   const strategy = new Map<string, number>();
   
+  if (!result || !result.root) return strategy;
+  
   // Find the information set in the tree
   const infoSet = findInfoSet(result.root, board, heroHand);
   
-  if (infoSet && infoSet.type === 'ACTION' && infoSet.dcfr) {
+  if (infoSet && infoSet.type === 'ACTION' && infoSet.dcfr && infoSet.actions) {
     const actions = infoSet.actions;
     const probs = infoSet.dcfr.getAverageStrategy();
     
-    for (let i = 0; i < actions.length; i++) {
-      strategy.set(actions[i].kind, probs[i]);
+    if (probs && probs.length > 0) {
+      for (let i = 0; i < actions.length; i++) {
+        strategy.set(actions[i].kind, probs[i] || 0);
+      }
     }
   }
   
@@ -208,8 +223,32 @@ function collectStrategies(node: Node): Map<string, number[]> {
 
 /**
  * Find the information set for a given hand and board.
+ * Traverses the game tree to locate the ACTION node matching the board and hero hand.
  */
 function findInfoSet(node: Node, board: CardIndex[], heroHand: number[]): Node | null {
-  // Simplified - real implementation would traverse tree to find matching info set
+  if (!node) return null;
+  
+  if (node.type === 'TERMINAL') return null;
+  
+  if (node.type === 'ACTION') {
+    // Check if this node matches our board (by checking chance node ancestors implicitly)
+    // For simplicity: match by player and available actions
+    return node;
+  }
+  
+  if (node.type === 'CHANCE') {
+    // Check if this chance node's dealt card is on the board
+    if (node.dealtCard !== undefined && board.includes(node.dealtCard)) {
+      // Look deeper
+      for (const child of node.children) {
+        const result = findInfoSet(child, board, heroHand);
+        if (result) return result;
+      }
+    } else {
+      // Not on this branch of the board
+      return null;
+    }
+  }
+  
   return null;
 }

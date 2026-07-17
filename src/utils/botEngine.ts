@@ -18,6 +18,20 @@ import { evaluateHand } from './handEvaluator';
 export type BotPersonality = 'tight-aggressive' | 'loose-aggressive' | 'tight-passive' | 'balanced';
 
 /**
+ * Session-level opponent action tracking for learning rate adaptation.
+ */
+export interface OpponentStats {
+  /** Total observed opponent actions this session */
+  totalActions: number;
+  /** Number of folds observed */
+  folds: number;
+  /** Number of calls observed */
+  calls: number;
+  /** Number of raises observed */
+  raises: number;
+}
+
+/**
  * Configuration for bot decision-making behavior.
  *
  * All probability values are in the range 0–1.
@@ -41,6 +55,33 @@ export interface BotSettings {
   tiltThreshold: number;
   /** Current tilt counter — increases with bad beats */
   currentTilt: number;
+  // ── Extended parameters ──
+  /** Tight/loose preflop hand selection (0–1). 0.2=very tight, 0.8=very loose */
+  tightLoose: number;
+  /** Risk tolerance — willingness to put chips at risk (0–1) */
+  riskTolerance: number;
+  /** Continuation bet frequency when preflop aggressor (0–1) */
+  continuationBetFreq: number;
+  /** Check-raise frequency (0–1) */
+  checkRaiseFreq: number;
+  /** Float frequency — call c-bet to bluff later streets (0–1) */
+  floatFreq: number;
+  /** Tank frequency — extra thinking time on complex decisions (0–1) */
+  tankFreq: number;
+  /** Snap action frequency — instant decisions (0–1) */
+  snapFreq: number;
+  /** Humanization level — randomness injected to mimic humans (0–1) */
+  humanizationLevel: number;
+  /** Position awareness — how much position influences decisions (0–1) */
+  positionAwareness: number;
+  /** Stack size awareness — adjusts for effective stack depth (0–1) */
+  stackSizeAwareness: number;
+  /** Randomization between similar-EV bet sizings (0–1) */
+  balanceRandomization: number;
+  /** How quickly the bot adapts to observed opponent tendencies (0–1) */
+  learningRate: number;
+  /** How often the bot folds when facing a preflop raise (0–1) */
+  foldToThreeBet: number;
 }
 
 /**
@@ -73,6 +114,19 @@ const DEFAULT_SETTINGS: BotSettings = {
   tableImage: 'tag',
   tiltThreshold: 5,
   currentTilt: 0,
+  tightLoose: 0.5,
+  riskTolerance: 0.4,
+  continuationBetFreq: 0.65,
+  checkRaiseFreq: 0.08,
+  floatFreq: 0.15,
+  tankFreq: 0.1,
+  snapFreq: 0.2,
+  humanizationLevel: 0.4,
+  positionAwareness: 0.7,
+  stackSizeAwareness: 0.6,
+  balanceRandomization: 0.25,
+  learningRate: 0,
+  foldToThreeBet: 0.5,
 };
 
 // ── Factory Functions ──
@@ -334,6 +388,7 @@ export function botDecision(
   state: GameState,
   player: Player,
   settings: BotSettings = DEFAULT_SETTINGS,
+  opponentStats?: OpponentStats,
 ): BotDecision {
   const { hand: holeCards, bet: playerBet, chips: playerChips } = player;
   const { currentBet, pot, currentPhase, players, communityCards } = state;
@@ -350,9 +405,25 @@ export function botDecision(
     };
   }
 
-  // --- Evaluate hand strength ---
+  // --- Evaluate hand strength early (needed for preflop filter) ---
   const handEval = evaluateHand(holeCards, communityCards);
-  // Normalize score to 0-1 range
+
+  // --- Preflop tight/loose filter ---
+  if (currentPhase === 'preflop' && holeCards.length === 2) {
+    const tier = preflopTier(holeCards);
+    // tightLoose 0.2 = only top ~20% of hands, 0.8 = top ~80%
+    const minTier = Math.floor(1 + (1 - settings.tightLoose) * 10);
+    if (tier < minTier) {
+      // Fold junk preflop
+      return {
+        action: 'fold', confidence: 0.9,
+        reasoning: `Preflop fold — ${handEval.description} below tight/loose threshold (${settings.tightLoose.toFixed(2)})`,
+        reactionTime: settings.reactionTimeMin * 0.5, isBluff: false,
+      };
+    }
+  }
+
+  // --- Normalize score to 0-1 range ---
   let equity: number;
   if (currentPhase === 'preflop') {
     // Preflop: use tier-based equity
@@ -363,10 +434,6 @@ export function botDecision(
     equity = handEval.score / 9_500_000;
   }
 
-  // --- Apply position ---
-  const posMult = positionMultiplier(player.position, players.length);
-  equity *= posMult;
-
   // --- Apply personality ---
   switch (settings.personality) {
     case 'tight-aggressive': equity *= 1.05; break;
@@ -374,6 +441,13 @@ export function botDecision(
     case 'tight-passive': equity *= 1.10; break;
     // balanced: no change
   }
+
+  // --- Apply position awareness ---
+  const posEffective = settings.positionAwareness;
+  const posMult = positionMultiplier(player.position, players.length);
+  // Blend raw position mult with 1.0 based on awareness level
+  const blendedPosMult = 1.0 + (posMult - 1.0) * posEffective;
+  equity *= blendedPosMult;
 
   // --- Apply tilt ---
   if (settings.currentTilt > settings.tiltThreshold) {
@@ -384,11 +458,49 @@ export function botDecision(
   // --- Clamp equity with wider range to preserve nuance ---
   equity = Math.min(0.98, Math.max(0.03, equity));
 
+  // --- Apply humanization noise ---
+  if (settings.humanizationLevel > 0) {
+    equity += (Math.random() - 0.5) * settings.humanizationLevel * 0.15;
+    equity = Math.min(0.98, Math.max(0.03, equity));
+  }
+
   // --- Apply mistake rate ---
   let finalEquity = equity;
   if (Math.random() < settings.mistakeRate) {
     // Occasionally misread hand strength
     finalEquity = Math.max(0.02, Math.min(1, equity + (Math.random() - 0.5) * 0.4));
+  }
+
+  // --- Fold to 3-bet / preflop raise check ---
+  if (currentPhase === 'preflop' && effectiveBet > 0 && settings.foldToThreeBet > 0) {
+    const foldChance = settings.foldToThreeBet * (1 - finalEquity);
+    if (Math.random() < foldChance) {
+      return {
+        action: 'fold', confidence: 0.7,
+        reasoning: `Folding to preflop raise — fold-to-3bet threshold (${(settings.foldToThreeBet * 100).toFixed(0)}% vs ${(finalEquity * 100).toFixed(0)}% equity)`,
+        reactionTime: settings.reactionTimeMin * 0.5, isBluff: false,
+      };
+    }
+  }
+
+  // --- Risk tolerance amplifies aggression and bluff ---
+  const effectiveAggression = settings.aggressionFactor * (0.7 + settings.riskTolerance * 0.6);
+  let effectiveBluff = settings.bluffFrequency * (0.5 + settings.riskTolerance);
+
+  // --- Learning rate: adapt to observed opponent tendencies ---
+  let adjustedAggression = effectiveAggression;
+  if (opponentStats && opponentStats.totalActions >= 5 && settings.learningRate > 0) {
+    const foldPct = opponentStats.folds / opponentStats.totalActions;
+    const callPct = opponentStats.calls / opponentStats.totalActions;
+    // Opponent folds too much → bluff more
+    if (foldPct > 0.6) {
+      effectiveBluff += settings.learningRate * 0.3;
+    }
+    // Opponent calls too much → reduce bluffs, increase value aggression
+    if (callPct > 0.5) {
+      effectiveBluff = Math.max(0, effectiveBluff - settings.learningRate * 0.2);
+      adjustedAggression = effectiveAggression * (1 + settings.learningRate * 0.25);
+    }
   }
 
   // --- Pot odds ---
@@ -400,14 +512,22 @@ export function botDecision(
   // Computed position normalized 0-1 for sizing calculations
   const positionNormalized = players.length > 1 ? player.position / (players.length - 1) : 0.5;
 
-  // --- Reaction time ---
+  // --- Reaction time with humanization ---
   const baseTime = settings.reactionTimeMin + Math.random() * (settings.reactionTimeMax - settings.reactionTimeMin);
   const complexity = currentPhase === 'preflop' ? 0.3
     : currentPhase === 'flop' ? 0.2
     : currentPhase === 'turn' ? 0.1
     : 0.1;
-  const tankTime = (finalEquity < 0.3 || finalEquity > 0.8) ? 0.4 : 0;
-  const reactionTime = baseTime + complexity + tankTime;
+  const tankTime = (finalEquity < 0.3 || finalEquity > 0.8)
+    ? settings.tankFreq * 0.6
+    : 0;
+  const snapReduction = Math.random() < settings.snapFreq ? -0.3 : 0;
+  const reactionTime = baseTime + complexity + tankTime + snapReduction;
+
+  // --- Stack size awareness ---
+  const stackAwareAdjust = settings.stackSizeAwareness;
+  // Deeper stacks → slightly more conservative sizing
+  const stackDepthBonus = spr > 5 ? 0.05 * stackAwareAdjust : spr < 1 ? -0.05 * stackAwareAdjust : 0;
 
   // --- Compute bet size using the realistic sizing function ---
   const getRaiseAmount = (strengthBonus = 0): number => {
@@ -416,10 +536,10 @@ export function botDecision(
       pot,
       playerChips,
       currentBet,
-      handStrength: finalEquity + strengthBonus,
+      handStrength: finalEquity + strengthBonus + stackDepthBonus,
       positionNormalized,
       opponentCount: numActiveOpponents,
-      aggression: settings.aggressionFactor,
+      aggression: adjustedAggression,
     });
   };
 
@@ -429,10 +549,13 @@ export function botDecision(
   let isBluff = false;
   let reasoning = '';
 
-  // Bluff logic
-  const shouldBluff = Math.random() < settings.bluffFrequency && finalEquity < 0.35 && effectiveBet > 0;
+  // Bluff logic (use effectiveBluff)
+  const shouldBluff = Math.random() < effectiveBluff && finalEquity < 0.35 && effectiveBet > 0;
   const isRiver = currentPhase === 'river';
-  const semiBluff = Math.random() < settings.bluffFrequency * 0.5 && finalEquity < 0.5 && !isRiver;
+  const semiBluff = Math.random() < effectiveBluff * 0.5 && finalEquity < 0.5 && !isRiver;
+  // Float logic — call c-bet with marginal equity to bluff later
+  const shouldFloat = !isRiver && effectiveBet > 0 && finalEquity > 0.15 && finalEquity < 0.35
+    && Math.random() < settings.floatFreq;
 
   if (shouldBluff) {
     // Pure bluff
@@ -446,9 +569,13 @@ export function botDecision(
     amount = getRaiseAmount(-0.05); // semi-bluff: moderate sizing
     isBluff = true;
     reasoning = `Semi-bluff — draw potential, fold equity`;
+  } else if (shouldFloat) {
+    // Float call — plan to bluff on later streets
+    action = 'call';
+    reasoning = `Float — calling with marginal equity to bluff ${isRiver ? 'river' : 'later street'}`;
   } else if (finalEquity > 0.80) {
     // Very strong hand — value bet or trap
-    if (Math.random() < settings.aggressionFactor * 1.2) {
+    if (Math.random() < adjustedAggression * 1.2) {
       action = 'raise';
       if (spr < 2) {
         amount = playerChips; // Shallow stack: shove
@@ -464,7 +591,12 @@ export function botDecision(
     }
   } else if (finalEquity > 0.60) {
     // Good hand
-    if (Math.random() < settings.aggressionFactor) {
+    // Check-raise opportunity
+    if (effectiveBet > 0 && Math.random() < settings.checkRaiseFreq && spr < 5) {
+      action = 'raise';
+      amount = getRaiseAmount(0.15); // size up for check-raise
+      reasoning = `Check-raise — trapping with ${handEval.description}`;
+    } else if (Math.random() < adjustedAggression) {
       action = 'raise';
       amount = getRaiseAmount(0.05);
       reasoning = `Solid hand (${handEval.description}), applying pressure`;
@@ -472,7 +604,7 @@ export function botDecision(
       action = 'call';
       reasoning = `Good hand, pot odds justify call (${(potOdds * 100).toFixed(0)}% needed, ${(finalEquity * 100).toFixed(0)}% equity)`;
     } else if (effectiveBet === 0) {
-      action = Math.random() < settings.aggressionFactor ? 'raise' : 'check';
+      action = Math.random() < adjustedAggression ? 'raise' : 'check';
       if (action === 'raise') amount = getRaiseAmount(0.0);
       reasoning = `Good hand, ${action === 'raise' ? 'betting' : 'checking'} for pot control`;
     } else {
@@ -482,10 +614,15 @@ export function botDecision(
   } else if (finalEquity > 0.40) {
     // Marginal hand
     if (effectiveBet === 0) {
-      // No bet to face
-      if (Math.random() < settings.aggressionFactor * 0.6) {
+      // No bet to face — c-bet logic
+      const wasPfr = numActiveOpponents === 0 || true; // simplified: c-bet as aggressor
+      if (wasPfr && Math.random() < settings.continuationBetFreq) {
         action = 'raise';
         amount = getRaiseAmount(-0.05); // c-bet: standard sizing
+        reasoning = `C-bet with ${handEval.description} as preflop aggressor`;
+      } else if (Math.random() < adjustedAggression * 0.4) {
+        action = 'raise';
+        amount = getRaiseAmount(-0.05);
         reasoning = `Marginal hand, c-bet as aggressor`;
       } else {
         action = 'check';
@@ -524,9 +661,15 @@ export function botDecision(
     }
   }
 
-  // --- Bet sizing safety ---
+  // --- Balance randomization: mix bet sizing for raise actions ---
+  if (action === 'raise' && amount && settings.balanceRandomization > 0) {
+    const randomFactor = 1 + (Math.random() - 0.5) * settings.balanceRandomization * 0.5;
+    amount = Math.round(amount * randomFactor);
+  }
+
+  // --- Bet sizing safety (enforce integers) ---
   if (action === 'raise' && amount) {
-    amount = Math.min(Math.max(amount, currentBet * 2), playerChips + playerBet);
+    amount = Math.round(Math.min(Math.max(amount, currentBet * 2), playerChips + playerBet));
     if (amount <= currentBet) action = effectiveBet > 0 ? 'call' : 'check';
   }
 

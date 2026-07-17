@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
-import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye, Save, FolderOpen, CheckCircle, Database, FileJson } from 'lucide-react';
+import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye, Save, FolderOpen, CheckCircle, Database, FileJson, Lightbulb } from 'lucide-react';
 import { exportData, importData, type ImportResult, restoreAutoBackup, getAutoBackupAge, checkStorageUsage } from '../utils/backup';
 
 const SettingsPanel: React.FC = React.memo(() => {
@@ -23,6 +23,38 @@ const SettingsPanel: React.FC = React.memo(() => {
   const autoPlaySpeed = useGameStore(s => s.autoPlaySpeed);
   const setAutoPlaySpeed = useGameStore(s => s.setAutoPlaySpeed);
   const trainingPersonality = trainingBotSettings.personality;
+
+  // ── Coach Tips Settings ──
+  const COACH_TIPS_ENABLED_KEY = 'pokertrainer-coach-tips-enabled';
+  const COACH_TIPS_CATEGORY_KEY = 'pokertrainer-coach-tips-category';
+  const COACH_TIPS_FREQ_KEY = 'pokertrainer-coach-tips-frequency';
+  const [coachTipsEnabled, setCoachTipsEnabledState] = useState<boolean>(() => {
+    try { const v = localStorage.getItem(COACH_TIPS_ENABLED_KEY); return v !== null ? v === 'true' : true; }
+    catch { return true; }
+  });
+  const [coachTipsCategory, setCoachTipsCategoryState] = useState<string>(() => {
+    try { const v = localStorage.getItem(COACH_TIPS_CATEGORY_KEY); return v || 'all'; }
+    catch { return 'all'; }
+  });
+  const [coachTipsFrequency, setCoachTipsFrequencyState] = useState<number>(() => {
+    try { const v = localStorage.getItem(COACH_TIPS_FREQ_KEY); const n = parseInt(v || ''); return (n === 30000 || n === 60000 || n === 120000) ? n : 60000; }
+    catch { return 60000; }
+  });
+
+  const setCoachTipsEnabled = useCallback((val: boolean) => {
+    setCoachTipsEnabledState(val);
+    try { localStorage.setItem(COACH_TIPS_ENABLED_KEY, String(val)); } catch { /* noop */ }
+  }, []);
+
+  const setCoachTipsCategory = useCallback((val: string) => {
+    setCoachTipsCategoryState(val);
+    try { localStorage.setItem(COACH_TIPS_CATEGORY_KEY, val); } catch { /* noop */ }
+  }, []);
+
+  const setCoachTipsFrequency = useCallback((val: number) => {
+    setCoachTipsFrequencyState(val);
+    try { localStorage.setItem(COACH_TIPS_FREQ_KEY, String(val)); } catch { /* noop */ }
+  }, []);
 
   const [numBots, setNumBots] = useState(Math.max(1, tableSize - 1));
 
@@ -150,6 +182,78 @@ const SettingsPanel: React.FC = React.memo(() => {
         </div>
       </div>
 
+      {/* ===== COACH TIPS SETTINGS ===== */}
+      <div className="card border-cyan-500/20 bg-gradient-to-br from-cyan-950/10 to-surface-elevated">
+        <div className="flex items-center gap-2 mb-3">
+          <Lightbulb size={16} className="text-gold" />
+          <span className="font-bold text-sm">Coach Tips</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold uppercase">Toast</span>
+        </div>
+        <p className="text-xs text-text-secondary mb-3">
+          Configure the coaching tips popup that appears at the bottom-right of the table.
+        </p>
+        <div className="space-y-3">
+          {/* Enable/Disable toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold">Enable Coach Tips</div>
+              <div className="text-[10px] text-text-secondary/40">{coachTipsEnabled ? 'Tips will appear during gameplay' : 'Tips are disabled'}</div>
+            </div>
+            <button
+              onClick={() => setCoachTipsEnabled(!coachTipsEnabled)}
+              className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${coachTipsEnabled ? 'bg-gold' : 'bg-surface-border'}`}
+              aria-label={coachTipsEnabled ? 'Disable coach tips' : 'Enable coach tips'}
+            >
+              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${coachTipsEnabled ? 'left-5' : 'left-0.5'}`} />
+            </button>
+          </div>
+
+          {/* Category filter */}
+          <div>
+            <label className="text-xs text-text-secondary mb-1.5 block font-semibold">Tip Category</label>
+            <div className="grid grid-cols-3 gap-1">
+              {(['all', 'strategy', 'math', 'psychology', 'bankroll', 'general'] as const).map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCoachTipsCategory(cat)}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
+                    coachTipsCategory === cat
+                      ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/40'
+                      : 'bg-white/5 text-text-secondary/60 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Display frequency */}
+          <div>
+            <label className="text-xs text-text-secondary mb-1.5 block font-semibold">Display Frequency</label>
+            <div className="grid grid-cols-3 gap-1">
+              {[
+                { value: 30000, label: '30s' },
+                { value: 60000, label: '60s' },
+                { value: 120000, label: '2min' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setCoachTipsFrequency(opt.value)}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
+                    coachTipsFrequency === opt.value
+                      ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/40'
+                      : 'bg-white/5 text-text-secondary/60 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ===== TRAINING BOT + OPPONENT BOTS ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* ===== TRAINING BOT ===== */}
@@ -197,27 +301,27 @@ const SettingsPanel: React.FC = React.memo(() => {
             {([
               {
                 key: 'gto', label: 'GTO', desc: 'Game Theory Optimal',
-                settings: { aggressionFactor: 0.55, bluffFrequency: 0.12, mistakeRate: 0.01, reactionTimeMin: 0.3, reactionTimeMax: 1.5 },
+                settings: { aggressionFactor: 0.55, bluffFrequency: 0.12, mistakeRate: 0.01, reactionTimeMin: 0.3, reactionTimeMax: 1.5, tightLoose: 0.45, riskTolerance: 0.5, continuationBetFreq: 0.6, checkRaiseFreq: 0.06, floatFreq: 0.12, tankFreq: 0.08, snapFreq: 0.25, humanizationLevel: 0.15, positionAwareness: 0.9, stackSizeAwareness: 0.8 },
                 color: 'border-blue-400/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400',
               },
               {
                 key: 'exploit', label: 'Exploit', desc: 'Exploitative play',
-                settings: { aggressionFactor: 0.80, bluffFrequency: 0.22, mistakeRate: 0.03, reactionTimeMin: 0.5, reactionTimeMax: 2.5 },
+                settings: { aggressionFactor: 0.80, bluffFrequency: 0.22, mistakeRate: 0.03, reactionTimeMin: 0.5, reactionTimeMax: 2.5, tightLoose: 0.55, riskTolerance: 0.7, continuationBetFreq: 0.75, checkRaiseFreq: 0.10, floatFreq: 0.20, tankFreq: 0.15, snapFreq: 0.15, humanizationLevel: 0.2, positionAwareness: 0.8, stackSizeAwareness: 0.7 },
                 color: 'border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-400',
               },
               {
                 key: 'mixed', label: 'Mixed', desc: 'Balanced hybrid',
-                settings: { aggressionFactor: 0.65, bluffFrequency: 0.15, mistakeRate: 0.02, reactionTimeMin: 0.4, reactionTimeMax: 2.0 },
+                settings: { aggressionFactor: 0.65, bluffFrequency: 0.15, mistakeRate: 0.02, reactionTimeMin: 0.4, reactionTimeMax: 2.0, tightLoose: 0.50, riskTolerance: 0.55, continuationBetFreq: 0.65, checkRaiseFreq: 0.08, floatFreq: 0.15, tankFreq: 0.10, snapFreq: 0.20, humanizationLevel: 0.3, positionAwareness: 0.7, stackSizeAwareness: 0.6 },
                 color: 'border-purple-400/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400',
               },
               {
                 key: 'nit', label: 'Rock', desc: 'Ultra-tight',
-                settings: { aggressionFactor: 0.30, bluffFrequency: 0.05, mistakeRate: 0.01, reactionTimeMin: 0.8, reactionTimeMax: 4.0 },
+                settings: { aggressionFactor: 0.30, bluffFrequency: 0.05, mistakeRate: 0.01, reactionTimeMin: 0.8, reactionTimeMax: 4.0, tightLoose: 0.20, riskTolerance: 0.2, continuationBetFreq: 0.30, checkRaiseFreq: 0.05, floatFreq: 0.05, tankFreq: 0.20, snapFreq: 0.05, humanizationLevel: 0.1, positionAwareness: 0.6, stackSizeAwareness: 0.5 },
                 color: 'border-green-400/40 bg-green-500/10 hover:bg-green-500/20 text-green-400',
               },
               {
                 key: 'maniac', label: 'Maniac', desc: 'Wild aggression',
-                settings: { aggressionFactor: 0.95, bluffFrequency: 0.28, mistakeRate: 0.08, reactionTimeMin: 0.2, reactionTimeMax: 1.0 },
+                settings: { aggressionFactor: 0.95, bluffFrequency: 0.28, mistakeRate: 0.08, reactionTimeMin: 0.2, reactionTimeMax: 1.0, tightLoose: 0.85, riskTolerance: 0.9, continuationBetFreq: 0.90, checkRaiseFreq: 0.15, floatFreq: 0.30, tankFreq: 0.05, snapFreq: 0.35, humanizationLevel: 0.5, positionAwareness: 0.4, stackSizeAwareness: 0.3 },
                 color: 'border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400',
               },
             ] as const).map(p => (
@@ -245,31 +349,31 @@ const SettingsPanel: React.FC = React.memo(() => {
             {([
               {
                 key: 'beginner', label: 'Beginner', desc: 'Tight, passive, low bluff',
-                settings: { aggressionFactor: 0.30, bluffFrequency: 0.05, mistakeRate: 0.06, reactionTimeMin: 0.6, reactionTimeMax: 4.0, personality: 'tight-passive' as BotPersonality },
+                settings: { aggressionFactor: 0.30, bluffFrequency: 0.05, mistakeRate: 0.06, reactionTimeMin: 0.6, reactionTimeMax: 4.0, personality: 'tight-passive' as BotPersonality, tightLoose: 0.25, riskTolerance: 0.15, continuationBetFreq: 0.25, checkRaiseFreq: 0.03, floatFreq: 0.05, tankFreq: 0.15, snapFreq: 0.05, humanizationLevel: 0.5, positionAwareness: 0.3, stackSizeAwareness: 0.2 },
                 color: 'border-green-400/40 bg-green-500/10 hover:bg-green-500/20 text-green-400',
                 active: trainingPersonality === 'tight-passive' && trainingBotSettings.bluffFrequency < 0.08,
               },
               {
                 key: 'intermediate', label: 'Intermediate', desc: 'Balanced play',
-                settings: { aggressionFactor: 0.50, bluffFrequency: 0.10, mistakeRate: 0.03, reactionTimeMin: 0.4, reactionTimeMax: 2.5, personality: 'balanced' as BotPersonality },
+                settings: { aggressionFactor: 0.50, bluffFrequency: 0.10, mistakeRate: 0.03, reactionTimeMin: 0.4, reactionTimeMax: 2.5, personality: 'balanced' as BotPersonality, tightLoose: 0.45, riskTolerance: 0.45, continuationBetFreq: 0.55, checkRaiseFreq: 0.07, floatFreq: 0.12, tankFreq: 0.10, snapFreq: 0.20, humanizationLevel: 0.35, positionAwareness: 0.6, stackSizeAwareness: 0.5 },
                 color: 'border-blue-400/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400',
                 active: trainingPersonality === 'balanced' && trainingBotSettings.aggressionFactor > 0.4 && trainingBotSettings.aggressionFactor < 0.7,
               },
               {
                 key: 'advanced', label: 'Advanced', desc: 'Loose, aggressive, high bluff',
-                settings: { aggressionFactor: 0.80, bluffFrequency: 0.22, mistakeRate: 0.02, reactionTimeMin: 0.2, reactionTimeMax: 1.5, personality: 'loose-aggressive' as BotPersonality },
+                settings: { aggressionFactor: 0.80, bluffFrequency: 0.22, mistakeRate: 0.02, reactionTimeMin: 0.2, reactionTimeMax: 1.5, personality: 'loose-aggressive' as BotPersonality, tightLoose: 0.65, riskTolerance: 0.75, continuationBetFreq: 0.70, checkRaiseFreq: 0.10, floatFreq: 0.20, tankFreq: 0.08, snapFreq: 0.25, humanizationLevel: 0.2, positionAwareness: 0.85, stackSizeAwareness: 0.7 },
                 color: 'border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-400',
                 active: trainingPersonality === 'loose-aggressive' && trainingBotSettings.aggressionFactor > 0.7,
               },
               {
                 key: 'gto', label: 'GTO', desc: 'Game theory optimal',
-                settings: { aggressionFactor: 0.55, bluffFrequency: 0.10, mistakeRate: 0.01, reactionTimeMin: 0.3, reactionTimeMax: 1.5, personality: 'balanced' as BotPersonality },
+                settings: { aggressionFactor: 0.55, bluffFrequency: 0.10, mistakeRate: 0.01, reactionTimeMin: 0.3, reactionTimeMax: 1.5, personality: 'balanced' as BotPersonality, tightLoose: 0.45, riskTolerance: 0.5, continuationBetFreq: 0.60, checkRaiseFreq: 0.06, floatFreq: 0.12, tankFreq: 0.08, snapFreq: 0.25, humanizationLevel: 0.1, positionAwareness: 0.95, stackSizeAwareness: 0.85 },
                 color: 'border-purple-400/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400',
                 active: trainingPersonality === 'balanced' && trainingBotSettings.mistakeRate < 0.02,
               },
               {
                 key: 'exploitative', label: 'Exploit', desc: 'Adaptive, high bluff',
-                settings: { aggressionFactor: 0.90, bluffFrequency: 0.25, mistakeRate: 0.03, reactionTimeMin: 0.3, reactionTimeMax: 2.0, personality: 'loose-aggressive' as BotPersonality },
+                settings: { aggressionFactor: 0.90, bluffFrequency: 0.25, mistakeRate: 0.03, reactionTimeMin: 0.3, reactionTimeMax: 2.0, personality: 'loose-aggressive' as BotPersonality, tightLoose: 0.60, riskTolerance: 0.80, continuationBetFreq: 0.80, checkRaiseFreq: 0.12, floatFreq: 0.25, tankFreq: 0.12, snapFreq: 0.18, humanizationLevel: 0.25, positionAwareness: 0.8, stackSizeAwareness: 0.65 },
                 color: 'border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400',
                 active: trainingPersonality === 'loose-aggressive' && trainingBotSettings.bluffFrequency > 0.20,
               },
@@ -324,6 +428,95 @@ const SettingsPanel: React.FC = React.memo(() => {
               <input type="number" min={0.5} max={10} step={0.1} value={trainingBotSettings.reactionTimeMax}
                 onChange={e => handleTrainingChange('reactionTimeMax', parseFloat(e.target.value) || 3)}
                 className="input-field text-sm" />
+            </div>
+          </div>
+
+          {/* ── Extended Parameters ── */}
+          <div className="pt-2 border-t border-white/5">
+            <label className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-bold block mb-2 flex items-center gap-1">
+              <Sliders size={10} /> Extended Parameters
+            </label>
+            <div className="space-y-2.5">
+              <SliderControl
+                label="Tight/Loose"
+                icon={<FlaskConical size={12} className="text-cyan-400" />}
+                value={trainingBotSettings.tightLoose * 100}
+                min={10} max={90}
+                onChange={v => handleTrainingChange('tightLoose', v / 100)}
+                colorClass="slider-cyan"
+              />
+              <SliderControl
+                label="Risk Tolerance"
+                icon={<Zap size={12} className="text-accent-yellow" />}
+                value={trainingBotSettings.riskTolerance * 100}
+                min={0} max={100}
+                onChange={v => handleTrainingChange('riskTolerance', v / 100)}
+                colorClass="slider-amber"
+              />
+              <SliderControl
+                label="C-Bet Freq"
+                icon={<Bot size={12} className="text-green-400" />}
+                value={trainingBotSettings.continuationBetFreq * 100}
+                min={0} max={100}
+                onChange={v => handleTrainingChange('continuationBetFreq', v / 100)}
+                colorClass="slider-green"
+              />
+              <SliderControl
+                label="Check-Raise Freq"
+                icon={<Shield size={12} className="text-purple-400" />}
+                value={trainingBotSettings.checkRaiseFreq * 100}
+                min={0} max={20}
+                onChange={v => handleTrainingChange('checkRaiseFreq', v / 100)}
+                colorClass="slider-purple"
+              />
+              <SliderControl
+                label="Float Freq"
+                icon={<Eye size={12} className="text-blue-400" />}
+                value={trainingBotSettings.floatFreq * 100}
+                min={0} max={40}
+                onChange={v => handleTrainingChange('floatFreq', v / 100)}
+                colorClass="slider-blue"
+              />
+              <SliderControl
+                label="Tank Freq"
+                icon={<AlertTriangle size={12} className="text-orange-400" />}
+                value={trainingBotSettings.tankFreq * 100}
+                min={0} max={50}
+                onChange={v => handleTrainingChange('tankFreq', v / 100)}
+                colorClass="slider-orange"
+              />
+              <SliderControl
+                label="Snap Freq"
+                icon={<Zap size={12} className="text-yellow-400" />}
+                value={trainingBotSettings.snapFreq * 100}
+                min={0} max={50}
+                onChange={v => handleTrainingChange('snapFreq', v / 100)}
+                colorClass="slider-yellow"
+              />
+              <SliderControl
+                label="Humanization"
+                icon={<FlaskConical size={12} className="text-pink-400" />}
+                value={trainingBotSettings.humanizationLevel * 100}
+                min={0} max={100}
+                onChange={v => handleTrainingChange('humanizationLevel', v / 100)}
+                colorClass="slider-pink"
+              />
+              <SliderControl
+                label="Position Awareness"
+                icon={<Users size={12} className="text-teal-400" />}
+                value={trainingBotSettings.positionAwareness * 100}
+                min={0} max={100}
+                onChange={v => handleTrainingChange('positionAwareness', v / 100)}
+                colorClass="slider-teal"
+              />
+              <SliderControl
+                label="Stack Awareness"
+                icon={<Bot size={12} className="text-indigo-400" />}
+                value={trainingBotSettings.stackSizeAwareness * 100}
+                min={0} max={100}
+                onChange={v => handleTrainingChange('stackSizeAwareness', v / 100)}
+                colorClass="slider-indigo"
+              />
             </div>
           </div>
         </div>

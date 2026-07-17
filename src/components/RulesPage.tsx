@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Trophy, Zap, Brain, Cpu } from 'lucide-react';
-import { GTOSolver } from './GTOSolver';
-import type { CardIndex } from '../engine/gto-solver/types';
+import { BookOpen, Trophy, Zap, Brain } from 'lucide-react';
 
 const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 
@@ -217,32 +215,31 @@ const RulesPage: React.FC = React.memo(() => {
       </div>
 
       <div className="card-premium">
-        <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Cpu size={18} className="text-accent-blue" /> GTO Solver</h3>
-        <p className="text-xs text-text-secondary/60 mb-4">
-          Interactive Game Theory Optimal solver powered by Discounted CFR algorithm. 
-          Select a board and hands to compute optimal strategies.
-        </p>
-        <GTOSolver 
-          board={[0, 13, 26] as CardIndex[]} // Example: 2c, 2d, 2h (simplified)
-          heroHand={[1, 14] as CardIndex[]}  // Example: Ac, Ad
-          villainHand={[2, 15] as CardIndex[]} // Example: Kc, Kh
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {[
-          { icon: Zap, color: 'text-accent-yellow', title: 'Betting Rounds', items: ['Pre-Flop: Betting starts left of Big Blind', 'Flop: 3 community cards dealt', 'Turn: 4th community card dealt', 'River: 5th community card dealt', 'Showdown: Best hand wins'] },
-          { icon: Brain, color: 'text-accent-blue', title: 'Actions', items: ['Check: Pass without betting', 'Call: Match current bet', 'Raise: Increase the bet', 'Fold: Forfeit your hand', 'All-In: Bet all your chips'] },
-        ].map((section, i) => (
-          <div key={i} className="card-premium">
-            <h3 className="text-lg font-black mb-3 flex items-center gap-2"><section.icon size={18} className={section.color} /> {section.title}</h3>
+        <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Brain size={18} className="text-accent-blue" /> Betting Actions &amp; Rules</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Betting Rounds */}
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5">
+            <h4 className="font-bold text-sm text-gold mb-3 flex items-center gap-2"><Zap size={14} /> Betting Rounds</h4>
             <ul className="space-y-2 text-sm text-text-secondary/70">
-              {section.items.map((item, j) => (
-                <li key={j} className="flex items-start gap-2"><span className="text-gold font-bold text-xs mt-0.5">{j + 1}.</span><span>{item}</span></li>
-              ))}
+              <li className="flex items-start gap-2"><span className="text-gold font-bold text-xs mt-0.5">1.</span><span><strong>Preflop</strong> — Each player receives 2 hole cards. Betting starts with the player left of the big blind.</span></li>
+              <li className="flex items-start gap-2"><span className="text-gold font-bold text-xs mt-0.5">2.</span><span><strong>Flop</strong> — 3 community cards dealt face-up. Another round of betting begins with the small blind.</span></li>
+              <li className="flex items-start gap-2"><span className="text-gold font-bold text-xs mt-0.5">3.</span><span><strong>Turn</strong> — 4th community card dealt. Betting round follows.</span></li>
+              <li className="flex items-start gap-2"><span className="text-gold font-bold text-xs mt-0.5">4.</span><span><strong>River</strong> — 5th community card dealt. Final betting round.</span></li>
+              <li className="flex items-start gap-2"><span className="text-gold font-bold text-xs mt-0.5">5.</span><span><strong>Showdown</strong> — Remaining players reveal hands. Best 5-card poker hand wins the pot.</span></li>
             </ul>
           </div>
-        ))}
+          {/* Available Actions */}
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5">
+            <h4 className="font-bold text-sm text-accent-blue mb-3 flex items-center gap-2"><Trophy size={14} /> Actions</h4>
+            <ul className="space-y-2 text-sm text-text-secondary/70">
+              <li className="flex items-start gap-2"><span className="text-accent-green font-bold text-xs mt-0.5">•</span><span><strong>Check</strong> — Pass the action to the next player without betting (only when no bet has been made).</span></li>
+              <li className="flex items-start gap-2"><span className="text-accent-green font-bold text-xs mt-0.5">•</span><span><strong>Call</strong> — Match the current bet to stay in the hand.</span></li>
+              <li className="flex items-start gap-2"><span className="text-accent-green font-bold text-xs mt-0.5">•</span><span><strong>Raise</strong> — Increase the current bet. Minimum raise is the size of the previous bet.</span></li>
+              <li className="flex items-start gap-2"><span className="text-accent-green font-bold text-xs mt-0.5">•</span><span><strong>Fold</strong> — Discard your hand and forfeit the pot.</span></li>
+              <li className="flex items-start gap-2"><span className="text-accent-green font-bold text-xs mt-0.5">•</span><span><strong>All-In</strong> — Bet all your remaining chips.</span></li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

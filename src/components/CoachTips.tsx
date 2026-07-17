@@ -135,7 +135,6 @@ const MAX_HISTORY = 30;
 
 const CoachTips: React.FC = React.memo(() => {
   const gameState = useGameStore(s => s.gameState);
-  const isPlaying = useGameStore(s => s.isPlaying);
   const stats = useGameStore(s => s.stats);
   const gameHistory = useGameStore(s => s.gameHistory);
 
@@ -217,6 +216,9 @@ const CoachTips: React.FC = React.memo(() => {
     }
   }, [dismissedIds]);
 
+  // Check if a game is active for phase-aware tip selection
+  const hasActiveGame = gameState !== null;
+
   // Pick a context-aware tip
   const pickTip = useCallback(() => {
     const phase = gameState?.currentPhase || 'preflop';
@@ -249,8 +251,8 @@ const CoachTips: React.FC = React.memo(() => {
       // Importance bonus
       if (tip.importance === 'high') score += 3;
       else if (tip.importance === 'medium') score += 1;
-      // Phase match
-      if (tip.context === phaseContext) score += 5;
+      // Phase match (skip when no active game — generic pool)
+      if (hasActiveGame && tip.context === phaseContext) score += 5;
       if (tip.context === 'any') score += 1;
       // Behavior match
       if (recentBehavior.foldingALot && (tip.context === 'preflop' || tip.category === 'strategy')) score += 3;
@@ -285,7 +287,7 @@ const CoachTips: React.FC = React.memo(() => {
 
   // Rotate tips while playing
   useEffect(() => {
-    if (!enabled || !isPlaying) {
+    if (!enabled) {
       setVisible(false);
       setCurrentTip(null);
       return;
@@ -319,7 +321,7 @@ const CoachTips: React.FC = React.memo(() => {
       clearInterval(interval);
       if (hideTimer) clearTimeout(hideTimer);
     };
-  }, [enabled, isPlaying, dismissed, pickTip, frequency, recordHistory]);
+  }, [enabled, dismissed, pickTip, frequency, recordHistory]);
 
   // Reset dismissed when hand changes
   useEffect(() => {
@@ -446,7 +448,7 @@ const CoachTips: React.FC = React.memo(() => {
               <Filter size={14} />
             </button>
             {showCategoryMenu && (
-              <div className="absolute bottom-full right-0 mb-1 bg-surface-elevated border border-white/10 rounded-xl p-1.5 shadow-xl z-[100] min-w-[160px]">
+              <div className="absolute bottom-full right-0 mb-1 bg-surface-elevated border border-white/10 rounded-xl p-1.5 shadow-xl z-[200] min-w-[160px] pointer-events-auto">
                 <div className="text-[9px] text-text-secondary/30 uppercase tracking-wider font-bold px-2 py-0.5 mb-0.5">Category</div>
                 {(['all', 'strategy', 'math', 'psychology', 'bankroll', 'general'] as const).map(cat => (
                   <button
@@ -497,7 +499,7 @@ const CoachTips: React.FC = React.memo(() => {
               <History size={14} />
             </button>
             {showHistory && (
-              <div className="absolute bottom-full right-0 mb-1 bg-surface-elevated border border-white/10 rounded-xl p-2 shadow-xl z-[100] w-[280px] max-h-[260px] overflow-y-auto">
+              <div className="absolute bottom-full right-0 mb-1 bg-surface-elevated border border-white/10 rounded-xl p-2 shadow-xl z-[200] w-[280px] max-h-[260px] overflow-y-auto pointer-events-auto">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] text-text-secondary/40 uppercase tracking-wider font-bold">Recent Tips</span>
                   <button
@@ -555,7 +557,7 @@ const CoachTips: React.FC = React.memo(() => {
       {/* Click-outside handler for menus */}
       {(showCategoryMenu || showHistory) && (
         <div
-          className="fixed inset-0 z-[99]"
+          className="fixed inset-0 z-[195]"
           onClick={() => { setShowCategoryMenu(false); setShowHistory(false); }}
           aria-hidden="true"
         />
