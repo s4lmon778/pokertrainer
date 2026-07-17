@@ -6,10 +6,9 @@ import SettingsPanel from './components/SettingsPanel';
 import Card from './components/Card';
 import CoachTips from './components/CoachTips';
 import ErrorBoundary from './components/ErrorBoundary';
-import TrainingBotSettings from './components/TrainingBotSettings';
 import { useGameStore } from './store/gameStore';
 import { initMonitoring, addBreadcrumb, reportWebVitals } from './utils/monitoring';
-import { Play, BarChart3, Settings, BookOpen, Info, Trophy, Brain, Zap, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Play, BarChart3, Settings, BookOpen, Info, Brain, Users, Sparkles, LogOut, Crown, Coins, Keyboard, XCircle, Loader2, RefreshCw } from 'lucide-react';
 
 // Code-split heavy components for faster initial load
 const StatsDashboard = lazy(() => import('./components/StatsDashboard'));
@@ -396,8 +395,8 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Landing page */}
-        {activeTab === 'play' && !isPlaying && !gameState && (
+        {/* Landing page — show when game view is not active on the play tab */}
+        {activeTab === 'play' && !showGame && (
           <section role="region" aria-label="Welcome">
             <LandingPage onStart={handleStartGame} goToTab={goToTab} />
           </section>

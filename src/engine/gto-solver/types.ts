@@ -31,6 +31,7 @@ export interface ChanceNode {
   type: 'CHANCE';
   children: Node[]; // One per possible deal card
   dealtCard?: CardIndex;
+  dealtCards?: CardIndex[]; // Parallel to children — which card each branch corresponds to
 }
 
 export interface TerminalNode {

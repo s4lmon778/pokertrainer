@@ -5,7 +5,7 @@
  * Mirrors shark-2.0's GameTree.hh structure.
  */
 
-import type { Node, ActionNode, ChanceNode, TerminalNode, Action, Street, DCFRModule, SolverConfig, RangeMatrix, SolveResult } from './types';
+import type { Node, ActionNode, ChanceNode, TerminalNode, Action, Street, DCFRModule, SolverConfig, RangeMatrix, SolveResult, CardIndex } from './types';
 import { BET_SIZING } from './types';
 
 // Tree statistics for monitoring
@@ -155,20 +155,23 @@ function getNextStreet(street: Street): Street | null {
  * Build a chance node for dealing community cards.
  */
 function buildChanceNode(parent: ActionNode, state: GameState, street: Street, settings: TreeBuilderSettings): ChanceNode {
+  const dealtCards: CardIndex[] = [];
   const node: ChanceNode = {
     type: 'CHANCE',
     children: [],
+    dealtCards,
   };
-  
+
   // Get available cards (not on board and not in hands)
   const availableCards = getAvailableCards(state.board);
-  
+
   for (const card of availableCards) {
     const nextState = { ...state, board: [...state.board, card], street };
     const child = buildActionNode(node, nextState, settings);
     node.children.push(child);
+    dealtCards.push(card);
   }
-  
+
   return node;
 }
 

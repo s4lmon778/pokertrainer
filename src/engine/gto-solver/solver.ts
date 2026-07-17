@@ -244,31 +244,59 @@ function collectStrategies(node: Node, strategy: Map<string, number[]> = new Map
 
 /**
  * Find the information set for a given hand and board.
- * Traverses the game tree to locate the ACTION node matching the board and hero hand.
+ * Traverses the game tree through CHANCE nodes matching board cards
+ * to locate the ACTION node at the correct street depth.
+ *
+ * For flop (3 cards): returns the root ACTION node (street 0).
+ * For turn (4 cards): descends through 1 CHANCE level matching board[3].
+ * For river (5 cards): descends through 2 CHANCE levels matching board[3] and board[4].
  */
-function findInfoSet(node: Node, board: CardIndex[], heroHand: number[]): Node | null {
+function findInfoSet(node: Node, board: CardIndex[], heroHand: number[], remaining?: number): Node | null {
   if (!node) return null;
-
   if (node.type === 'TERMINAL') return null;
 
+  // How many board cards beyond the initial 3-card flop we still need to match
+  const toMatch = remaining ?? (board.length - 3);
+
   if (node.type === 'ACTION') {
-    // This is a candidate — return it as the info set
-    // (In a full solver, we'd match by player's known cards, but for DCFR
-    // the strategy at any action node represents the optimal mix)
+    // If all CHANCE levels matched, this ACTION node is at the target street
+    if (toMatch <= 0) return node;
+
+    // Still need to descend through CHANCE nodes — search children
+    for (const child of node.children) {
+      const result = findInfoSet(child, board, heroHand, toMatch);
+      if (result) return result;
+    }
+    // No CHANCE path found — return this node as closest match
     return node;
   }
 
   if (node.type === 'CHANCE') {
-    // Check if this chance node's dealt card is on the board
-    if (node.dealtCard !== undefined && board.includes(node.dealtCard)) {
-      // Look deeper down this branch
+    if (toMatch <= 0 || !node.dealtCards || node.dealtCards.length === 0) {
+      // Unexpected: CHANCE node with nothing to match — try first child
       for (const child of node.children) {
-        const result = findInfoSet(child, board, heroHand);
+        const result = findInfoSet(child, board, heroHand, 0);
         if (result) return result;
       }
+      return null;
     }
-    // Don't return null here — try sibling branches at parent level
-    // For now, skip this chance branch
+
+    // Match the next board card: board[board.length - toMatch] is the next street card
+    const targetIdx = board.length - toMatch;
+    const targetCard = board[targetIdx];
+    const childIdx = node.dealtCards.indexOf(targetCard);
+
+    if (childIdx >= 0 && childIdx < node.children.length) {
+      // Exact match — follow this branch with one fewer card to match
+      return findInfoSet(node.children[childIdx], board, heroHand, toMatch - 1);
+    }
+
+    // Card not found in dealt cards (e.g. card is in a player's hand) —
+    // fall back to first available child branch
+    for (const child of node.children) {
+      const result = findInfoSet(child, board, heroHand, toMatch - 1);
+      if (result) return result;
+    }
   }
 
   return null;
