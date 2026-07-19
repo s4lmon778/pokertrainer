@@ -1,4 +1,5 @@
 {
+  "identifier": "com.pokertrainer.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -17,7 +18,6 @@
     ]
   },
   "app": {
-    "title": "PokerTrainer",
     "windows": [
       {
         "title": "PokerTrainer",

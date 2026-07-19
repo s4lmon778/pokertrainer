@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { BookOpen, Trophy, Zap, Brain } from 'lucide-react';
+import { BookOpen, Trophy, Zap, Brain, Cpu } from 'lucide-react';
+import { GTOSolver } from './GTOSolver';
+import type { CardIndex } from '../engine/gto-solver/types';
 
 const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 
@@ -202,6 +204,17 @@ const RulesPage: React.FC = React.memo(() => {
             );
           })}
         </div>
+      </div>
+
+      {/* GTO Solver Section */}
+      <div className="card-premium">
+        <h3 className="text-lg font-black mb-4 flex items-center gap-2"><Cpu size={18} className="text-accent-purple" /> GTO Solver</h3>
+        <p className="text-xs text-text-secondary/60 mb-4">Interactive Game Theory Optimal solver. Select ranges, set iterations, and solve for optimal strategies.</p>
+        <GTOSolver
+          board={[0, 1, 2] as CardIndex[]}
+          heroHand={[3] as CardIndex[]}
+          villainHand={[4] as CardIndex[]}
+        />
       </div>
 
       <div className="card-premium overflow-x-auto">
