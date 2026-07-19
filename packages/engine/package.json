@@ -2,17 +2,24 @@
   "name": "@pokertrainer/engine",
   "version": "1.0.0",
   "description": "PokerTrainer core poker engine — GTO solver, Training Bot, hand evaluator",
-  "main": "dist/packages/engine/src/index.js",
-  "types": "dist/packages/engine/src/index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/packages/engine/src/index.js",
-      "require": "./dist/packages/engine/src/index.js",
-      "types": "./dist/packages/engine/src/index.d.ts"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/index.js.map",
+    "dist/index.d.ts.map"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run clean-artifacts",
+    "clean-artifacts": "rm -rf dist/src dist/packages 2>/dev/null; exit 0",
     "test": "vitest run",
     "clean": "rm -rf dist"
   },

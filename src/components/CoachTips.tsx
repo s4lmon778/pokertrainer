@@ -367,7 +367,7 @@ const CoachTips: React.FC = React.memo(() => {
   return (
     <>
       {/* Tip toast */}
-      <div className="fixed bottom-4 right-4 z-[90] flex items-center gap-2">
+      <div className="fixed bottom-4 right-4 z-[100] flex items-center gap-2">
         {visible && (
           <div className="animate-slide-up bg-surface-elevated border border-white/10 rounded-xl px-4 py-2.5 shadow-xl flex items-start gap-3 max-w-[360px] backdrop-blur-xl">
             <Lightbulb size={16} className="text-gold shrink-0 mt-0.5" />

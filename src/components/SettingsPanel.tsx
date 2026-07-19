@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { BotPersonality, BotSettings } from '../utils/botEngine';
 import { Zap, Shield, AlertTriangle, RefreshCw, Plus, Minus, Bot, FlaskConical, Users, Wrench, ChevronDown, ChevronUp, Upload, Download, Sliders, Eye, Save, FolderOpen, CheckCircle, Database, FileJson, Lightbulb } from 'lucide-react';
-import { exportData, importData, type ImportResult, restoreAutoBackup, getAutoBackupAge, checkStorageUsage } from '../utils/backup';
+import { exportData, importData, type ImportResult, getAutoBackupAge, checkStorageUsage } from '../utils/backup';
 
 // ── Slider sub-component (module-level to avoid recreation) ──
 
@@ -37,6 +37,7 @@ const SliderControl: React.FC<{
           onChange={handleChange}
           className={colorClass}
           style={{ '--slider-pct': `${pct}%` } as React.CSSProperties}
+          aria-label={label}
         />
         <div className="flex justify-between px-[2px] mt-0.5">
           <span className="text-[9px] text-text-secondary/30 font-mono">{min}{unit}</span>
@@ -139,11 +140,13 @@ const SettingsPanel: React.FC = React.memo(() => {
             <label className="text-xs text-text-secondary mb-1 block font-semibold">Bots (1 Training + opponents)</label>
             <div className="flex items-center gap-1.5">
               <button onClick={() => handleNumBotsChange(-1)} disabled={numBots <= 2}
+                aria-label="Decrease number of bots"
                 className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:border-gold hover:text-gold disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-white/10 disabled:hover:text-text-primary transition-all">
                 <Minus size={14} />
               </button>
               <span className="text-lg font-bold text-gold font-mono w-8 text-center">{numBots}</span>
               <button onClick={() => handleNumBotsChange(1)} disabled={numBots >= 8}
+                aria-label="Increase number of bots"
                 className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:border-gold hover:text-gold disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-white/10 disabled:hover:text-text-primary transition-all">
                 <Plus size={14} />
               </button>
