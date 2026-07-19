@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { Lightbulb, X, ChevronRight, Filter, ThumbsUp, ThumbsDown, History, Clock, RotateCcw } from 'lucide-react';
 
@@ -169,8 +169,6 @@ const CoachTips: React.FC = React.memo(() => {
   const [dismissed, setDismissed] = useState(false);
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-
-  const foldStreakRef = useRef(0);
 
   // Detect recent player behavior
   const recentBehavior = useMemo(() => {

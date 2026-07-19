@@ -1,8 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  Video, Square, Save, Download, AlertCircle, DollarSign,
-  CheckCircle, XCircle, ChevronRight, FileDown,
+  Video, Square, Save, Download, AlertCircle,
+  XCircle, ChevronRight,
 } from 'lucide-react';
 
 /** Shape of a recorded hand returned from the Rust backend. */

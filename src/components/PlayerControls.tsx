@@ -174,7 +174,7 @@ const PlayerControls: React.FC = React.memo(() => {
               {isMyTurn ? (isActing ? 'Acting...' : 'Your Turn') : 'Waiting'}
             </span>
             {isMyTurn && !isActing && (
-              <Loader2 size={12} className="text-gold animate-spin hidden" />
+              <span className="text-[10px] text-text-secondary/50 font-bold ml-1">ACT</span>
             )}
           </div>
           <span className="text-text-secondary/60 text-[10px] font-mono font-semibold bg-white/5 rounded-full px-2 py-0.5 border border-white/5">

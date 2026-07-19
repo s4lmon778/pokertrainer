@@ -145,10 +145,6 @@ const StartingHandsMatrix: React.FC = React.memo(() => (
 ));
 StartingHandsMatrix.displayName = 'StartingHandsMatrix';
 
-const suitColors: Record<string, string> = {
-  '♠': '#0f172a', '♥': '#ef4444', '♦': '#f97316', '♣': '#1e293b',
-};
-
 const RulesPage: React.FC = React.memo(() => {
   const handRankings = [
     { rank: 1, name: 'Royal Flush', desc: 'A, K, Q, J, 10, all same suit', example: 'A♠ K♠ Q♠ J♠ 10♠', pct: '0.000154%', color: 'from-yellow-400 to-yellow-600' },

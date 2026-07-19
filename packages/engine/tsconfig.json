@@ -14,10 +14,7 @@
     "moduleResolution": "node",
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "baseUrl": "..",
-    "paths": {
-      "@pokertrainer/engine/*": ["src/engine/*"]
-    }
+    "ignoreDeprecations": "5.0"
   },
   "include": [
     "../../src/engine/**/*.ts",

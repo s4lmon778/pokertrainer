@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  Camera, MousePointer, Keyboard, Play, Pause, Circle,
+  Camera, MousePointer, Keyboard,
   Table2, History, Settings, Crosshair, Monitor,
 } from 'lucide-react';
 import TableDashboard from './components/TableDashboard';

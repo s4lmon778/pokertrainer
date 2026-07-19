@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Play, Pause, RefreshCw, DollarSign, TrendingUp, TrendingDown, Circle } from 'lucide-react';
+import { Play, Pause, RefreshCw, TrendingUp, TrendingDown, Circle } from 'lucide-react';
 
 /** Status shape returned by the multi_table Tauri command. */
 interface TableStatus {
