@@ -8,4 +8,4 @@ set ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash
 set CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-flash
 set CLAUDE_CODE_EFFORT_LEVEL=max
 cd /d "C:\Users\cheuk\OneDrive\Desktop\AI-Development\Projects\pokertrainer"
-claude -p "$(cat claude-desktop-modules.md)" --max-turns 30 --allowedTools Read,Write,Bash --dangerously-skip-permissions
+claude -p "Implement all 7 tasks in order, starting with the Rust modules. Follow the prompt in claude-desktop-modules.md exactly. Do not stop — complete everything." --max-turns 30 --allowedTools Read,Write,Bash --dangerously-skip-permissions
