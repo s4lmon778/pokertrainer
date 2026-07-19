@@ -6,7 +6,7 @@
  */
 
 import { solve } from './solver';
-import type { SolveRequest, SolveProgress, SolveComplete, SolveError, WorkerMessage, WorkerResponse, CardIndex } from './types';
+import type { SolveRequest, SolveProgress, SolveComplete, SolveError, WorkerMessage } from './types';
 
 // Worker message handler
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
@@ -14,7 +14,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   
   try {
     if (message.type === 'SOLVE') {
-      await handleSolveRequest(message);
+      handleSolveRequest(message);
     }
   } catch (error) {
     // Send error response
@@ -28,7 +28,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 /**
  * Handle solve request from main thread.
  */
-async function handleSolveRequest(request: SolveRequest): Promise<void> {
+function handleSolveRequest(request: SolveRequest): void {
   // Notify progress start
   self.postMessage({
     type: 'PROGRESS',

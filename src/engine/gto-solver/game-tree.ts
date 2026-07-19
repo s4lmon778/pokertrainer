@@ -5,7 +5,7 @@
  * Mirrors shark-2.0's GameTree.hh structure.
  */
 
-import type { Node, ActionNode, ChanceNode, TerminalNode, Action, Street, DCFRModule, SolverConfig, RangeMatrix, SolveResult, CardIndex } from './types';
+import type { Node, ActionNode, ChanceNode, TerminalNode, Action, Street, CardIndex } from './types';
 import { BET_SIZING } from './types';
 
 // Tree statistics for monitoring

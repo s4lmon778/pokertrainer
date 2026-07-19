@@ -6,10 +6,9 @@
  */
 
 import { buildGameTree, type TreeBuilderSettings } from './game-tree';
-import type { DCFRModule } from './types';
 import { solveDCFR, createDCFRModule } from './dcfr';
-import { computeHandEquity } from './equity';
-import type { Node, SolveResult, Action, Street, CardIndex } from './types';
+import { cardIndexToString } from './equity';
+import type { Node, SolveResult, CardIndex } from './types';
 
 // Default solver settings
 const DEFAULT_SETTINGS = {
@@ -194,17 +193,6 @@ export function exportPIO(result: SolveResult, board: CardIndex[]): string {
   return output;
 }
 
-/**
- * Convert card index to PioFormat string.
- */
-function cardIndexToString(card: number): string {
-  const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
-  const SUITS = ['c', 'd', 'h', 's'];
-  
-  const rank = card % 13;
-  const suit = Math.floor(card / 13);
-  return `${RANKS[rank]}${SUITS[suit]}`;
-}
 
 /**
  * Attach DCFR modules to all action nodes in the tree.

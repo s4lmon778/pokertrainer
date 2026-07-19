@@ -26,8 +26,8 @@ let gamma = 0.0;
  */
 export function precomputeDiscounts(t: number): void {
   const tAlpha = Math.max(0, t - 1);
-  const powAlpha = tAlpha * Math.sqrt(tAlpha);
-  alpha = powAlpha / (powAlpha + 1);
+  const sqrtTAlpha = Math.sqrt(tAlpha);
+  alpha = sqrtTAlpha / (sqrtTAlpha + 1);
   
   beta = 0.5;
   
@@ -287,9 +287,11 @@ export function cfrTraversal(
       expectedUtil += strategy[i] * actionUtils[i];
     }
 
+    // Zero-sum: non-acting player's utility is the negative of the acting player's
+    const isHero = player === 0;
     return {
-      heroUtility: player === 0 ? expectedUtil : 0,
-      villainUtility: player === 1 ? expectedUtil : 0,
+      heroUtility: isHero ? expectedUtil : -expectedUtil,
+      villainUtility: isHero ? -expectedUtil : expectedUtil,
     };
   }
 

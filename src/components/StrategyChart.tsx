@@ -5,7 +5,7 @@
  * Displays strategy frequencies across all 169 hand combinations.
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import type { CardIndex } from '../engine/gto-solver/types';
 
 const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];

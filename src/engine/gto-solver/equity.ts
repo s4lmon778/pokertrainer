@@ -185,9 +185,13 @@ export function estimateEquityAgainstRange(
  * Sample a hand from a range matrix.
  */
 function sampleFromRange(range: boolean[], board: number[], heroHand: number[]): number[] | null {
-  // Simplified - real implementation would properly sample from 1326 matrix
+  // Filter available cards to those present in the range
   const available = getAvailableCards(board, heroHand);
-  return drawTwoCards(available);
+  const rangeFiltered = available.filter(cardIdx => range[cardIdx] === true);
+
+  // If no cards in range are available, fall back to all available
+  const pool = rangeFiltered.length >= 2 ? rangeFiltered : available;
+  return drawTwoCards(pool);
 }
 
 /**
