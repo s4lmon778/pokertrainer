@@ -2,13 +2,14 @@
  * @pokertrainer/engine — Core Poker Engine
  *
  * Standalone package containing:
- * - GTO Solver (DCFR-based)
+ * - GTO Solver (DCFRCFR-based)
  * - Training Bot engine (strategies, config, presets)
  * - Hand evaluator
  * - Bot decision engine
  * - Equity calculator
  * - Deck utilities
  * - Side pot calculator
+ * - Config export/import
  *
  * Usage:
  * ```typescript

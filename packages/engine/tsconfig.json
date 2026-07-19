@@ -7,14 +7,27 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "../..",
     "strict": true,
     "noImplicitAny": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
     "skipLibCheck": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": "..",
+    "paths": {
+      "@pokertrainer/engine/*": ["src/engine/*"]
+    }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
+  "include": [
+    "../../src/engine/**/*.ts",
+    "../../src/types/**/*.ts",
+    "../../src/utils/botEngine.ts",
+    "../../src/utils/configExport.ts",
+    "../../src/utils/deck.ts",
+    "../../src/utils/equity.ts",
+    "../../src/utils/handEvaluator.ts",
+    "../../src/utils/sidePot.ts"
+  ],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/*.test.tsx", "**/*.js", "**/*.d.ts"]
 }
