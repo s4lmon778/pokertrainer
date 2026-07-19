@@ -1,0 +1,5 @@
+# Engine package build artifacts in src/
+src/**/*.js
+src/**/*.d.ts
+src/**/*.js.map
+src/**/*.d.ts.map

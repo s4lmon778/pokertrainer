@@ -10,7 +10,7 @@
  * - Settings will be shared with the poker engine for decision making
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import {
   DEFAULT_TRAINING_CONFIG,
@@ -22,8 +22,9 @@ import {
   type TrainingBotConfig,
 } from '../engine/trainingBot';
 import {
-  Settings, Save, RotateCcw, Play, Sliders, TrendingUp, Brain, Shield, Zap, AlertTriangle, Users, BarChart3, Eye, Sparkles, Trash2, Loader2,
+  Settings, Save, RotateCcw, Play, Sliders, TrendingUp, Brain, Shield, Zap, AlertTriangle, Users, BarChart3, Eye, Sparkles, Trash2, Loader2, Download, Upload, FileJson, Package, ExternalLink,
 } from 'lucide-react';
+import { downloadConfig, importConfig, exportConfigJson, configSummary } from '../utils/configExport';
 
 const TrainingBotSettings: React.FC = () => {
   const trainingBotConfig = useGameStore(s => s.trainingBotConfig);
@@ -49,18 +50,32 @@ const TrainingBotSettings: React.FC = () => {
   /** Loading state for async preset operations */
   const [presetLoading, setPresetLoading] = useState<string | null>(null);
 
+  /** Hidden file input ref for config import */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** Feedback for export/import operations */
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
+
   // Refresh the custom preset list on mount
   useEffect(() => {
     setCustomPresets(listPresets());
   }, []);
 
-  // Auto-dismiss feedback after 3 seconds
+  // Auto-dismiss preset feedback after 3 seconds
   useEffect(() => {
     if (presetFeedback) {
       const timer = setTimeout(() => setPresetFeedback(null), 3000);
       return () => clearTimeout(timer);
     }
   }, [presetFeedback]);
+
+  // Auto-dismiss export feedback after 3 seconds
+  useEffect(() => {
+    if (exportFeedback) {
+      const timer = setTimeout(() => setExportFeedback(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [exportFeedback]);
 
   /**
    * Save the current config as a named custom preset.
@@ -124,6 +139,37 @@ const TrainingBotSettings: React.FC = () => {
     }
   }, [preset]);
 
+  /**
+   * Import a config from a JSON file selected by the user.
+   * Updates localConfig on success, shows feedback on failure.
+   */
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const imported = await importConfig(file);
+    if (imported) {
+      setLocalConfig(imported);
+      setExportFeedback('Config imported successfully.');
+    } else {
+      setExportFeedback('Failed to import config — invalid file.');
+    }
+    // Clear so re-selecting the same file triggers onChange again
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  /**
+   * Copy the current config JSON to the clipboard.
+   */
+  const handleCopyToClipboard = useCallback(async () => {
+    try {
+      const json = exportConfigJson(localConfig);
+      await navigator.clipboard.writeText(json);
+      setExportFeedback('Config copied to clipboard.');
+    } catch {
+      setExportFeedback('Failed to copy to clipboard.');
+    }
+  }, [localConfig]);
+
   /** Reset all settings to the default config. */
   const handleResetToDefault = useCallback(() => {
     setLocalConfig(DEFAULT_TRAINING_CONFIG);
@@ -178,6 +224,58 @@ const TrainingBotSettings: React.FC = () => {
           <button onClick={handleReset} className="btn-secondary flex items-center gap-2">
             <RotateCcw size={16} />
             Reset
+          </button>
+        </div>
+      </div>
+
+      {/* Export Section */}
+      <div className="space-y-3 p-4 bg-white/5 rounded-xl border border-white/10">
+        <div className="flex items-center gap-2">
+          <Package className="w-5 h-5 text-gold" />
+          <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">Export / Import</h3>
+        </div>
+
+        {/* Config summary */}
+        <div className="bg-black/20 rounded-lg p-3 text-xs font-mono text-text-secondary/80 leading-relaxed">
+          {configSummary(localConfig)}
+        </div>
+
+        {/* Feedback */}
+        {exportFeedback && (
+          <p className="text-xs text-emerald-400 font-medium">{exportFeedback}</p>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => downloadConfig(localConfig)}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            <Download size={14} />
+            Download
+          </button>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImport}
+            accept=".json"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            <Upload size={14} />
+            Import
+          </button>
+
+          <button
+            onClick={handleCopyToClipboard}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            <FileJson size={14} />
+            Copy JSON
           </button>
         </div>
       </div>

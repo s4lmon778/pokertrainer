@@ -8,4 +8,4 @@ set ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4-flash
 set CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-flash
 set CLAUDE_CODE_EFFORT_LEVEL=max
 cd /d "C:\Users\cheuk\OneDrive\Desktop\AI-Development\Projects\pokertrainer"
-"C:\Users\cheuk\.local\bin\claude.cmd" -p "$(cat claude-gto-polish.md)" --max-turns 30 --allowedTools Read,Write,Bash --dangerously-skip-permissions
+claude -p "$(cat claude-engine-desktop.md)" --max-turns 30 --allowedTools Read,Write,Bash --dangerously-skip-permissions

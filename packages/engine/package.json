@@ -1,0 +1,29 @@
+{
+  "name": "@pokertrainer/engine",
+  "version": "1.0.0",
+  "description": "PokerTrainer core poker engine — GTO solver, Training Bot, hand evaluator",
+  "main": "dist/packages/engine/src/index.js",
+  "types": "dist/packages/engine/src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/packages/engine/src/index.js",
+      "require": "./dist/packages/engine/src/index.js",
+      "types": "./dist/packages/engine/src/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["poker", "gto", "training", "bot", "solver"],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}
