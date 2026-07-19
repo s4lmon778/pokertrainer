@@ -8,14 +8,22 @@ import React, { useState, useCallback } from 'react';
 import { Download, Package, AlertCircle, CheckCircle, Loader2, ExternalLink, Terminal } from 'lucide-react';
 import { checkLatestRelease, downloadDesktopApp, getBuildInstructions } from '../utils/desktopAppBuilder';
 
+// Direct link to the latest release
+const LATEST_RELEASE_URL = 'https://github.com/s4lmon778/pokertrainer/releases/tag/v1.0.0';
+const WINDOWS_INSTALLER_URL = 'https://github.com/s4lmon778/pokertrainer/releases/download/v1.0.0/PokerTrainer_1.0.0_x64-setup.exe';
+
 const DesktopAppBuilder: React.FC = () => {
-  const [releaseInfo, setReleaseInfo] = useState<{ tag: string; url: string; assetName: string } | null>(null);
+  const [releaseInfo, setReleaseInfo] = useState<{ tag: string; url: string; assetName: string } | null>({
+    tag: 'v1.0.0',
+    url: WINDOWS_INSTALLER_URL,
+    assetName: 'PokerTrainer_1.0.0_x64-setup.exe',
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
 
   /**
-   * Check for latest release.
+   * Check for latest release (refreshes from GitHub).
    */
   const handleCheckRelease = useCallback(async () => {
     setLoading(true);
@@ -44,17 +52,18 @@ const DesktopAppBuilder: React.FC = () => {
    * Download the desktop app.
    */
   const handleDownload = useCallback(async () => {
-    const result = await downloadDesktopApp();
-    if (!result.success && result.error) {
-      setError(result.error);
+    if (releaseInfo?.url) {
+      window.open(releaseInfo.url, '_blank', 'noopener,noreferrer');
+    } else {
+      setError('No installer available');
     }
-  }, []);
+  }, [releaseInfo]);
 
   /**
    * Open GitHub releases page.
    */
   const openGitHubReleases = useCallback(() => {
-    window.open('https://github.com/s4lmon778/pokertrainer/releases', '_blank', 'noopener,noreferrer');
+    window.open(LATEST_RELEASE_URL, '_blank', 'noopener,noreferrer');
   }, []);
 
   return (
@@ -81,7 +90,7 @@ const DesktopAppBuilder: React.FC = () => {
           ) : (
             <ExternalLink size={14} />
           )}
-          Check Releases
+          Refresh Release
         </button>
       </div>
 
@@ -148,7 +157,7 @@ const DesktopAppBuilder: React.FC = () => {
       {/* Status */}
       {!releaseInfo && !error && (
         <div className="text-center py-4 text-text-secondary/40 text-sm">
-          Click "Check Releases" to find the latest desktop app
+          Click "Refresh Release" to find the latest desktop app
         </div>
       )}
     </div>
