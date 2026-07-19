@@ -178,9 +178,7 @@ function buildChanceNode(parent: ActionNode, state: GameState, street: Street, s
 /**
  * Build a terminal node with computed payoffs.
  */
-function buildTerminalNode(parent: ActionNode, state: GameState): TerminalNode {
-  // Compute payoffs based on last action and hand strengths
-  // For now, use simplified payoff calculation
+function buildTerminalNode(parent: ActionNode, state: GameState, terminalType: 'SHOWDOWN' | 'FOLD' | 'UNCONTESTED' = 'SHOWDOWN'): TerminalNode {
   const payoff = computeTerminalPayoff(state);
   
   return {
@@ -188,6 +186,7 @@ function buildTerminalNode(parent: ActionNode, state: GameState): TerminalNode {
     payoff,
     lastToAct: state.lastToAct,
     potSize: state.pot,
+    terminalType,
   };
 }
 

@@ -39,6 +39,7 @@ export interface TerminalNode {
   payoff: [number, number]; // [hero payoff, villain payoff]
   lastToAct: 0 | 1;
   potSize: number;
+  terminalType?: 'SHOWDOWN' | 'FOLD' | 'UNCONTESTED';
 }
 
 export type Node = ActionNode | ChanceNode | TerminalNode;

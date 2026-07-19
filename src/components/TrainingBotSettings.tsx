@@ -25,12 +25,13 @@ import {
   Settings, Save, RotateCcw, Play, Sliders, TrendingUp, Brain, Shield, Zap, AlertTriangle, Users, BarChart3, Eye, Sparkles, Trash2, Loader2, Download, Upload, FileJson, Package, ExternalLink,
 } from 'lucide-react';
 import { downloadConfig, importConfig, exportConfigJson, configSummary } from '../utils/configExport';
+import DesktopAppBuilder from './DesktopAppBuilder';
 
 const TrainingBotSettings: React.FC = () => {
   const trainingBotConfig = useGameStore(s => s.trainingBotConfig);
   const updateTrainingBotConfig = useGameStore(s => s.updateTrainingBotConfig);
   const [localConfig, setLocalConfig] = useState<TrainingBotConfig>(trainingBotConfig);
-  const [activeTab, setActiveTab] = useState<'general' | 'aggression' | 'bluffing' | 'postflop' | 'humanization' | 'tilt' | 'adaptation' | 'presets'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'aggression' | 'bluffing' | 'postflop' | 'humanization' | 'tilt' | 'adaptation' | 'presets' | 'desktop'>('general');
   const [preset, setPreset] = useState<string>('balanced');
 
   // ── Custom Preset Management ──
@@ -311,6 +312,7 @@ const TrainingBotSettings: React.FC = () => {
           { id: 'tilt', label: 'Tilt', icon: AlertTriangle },
           { id: 'adaptation', label: 'Adaptation', icon: TrendingUp },
           { id: 'presets', label: 'Presets', icon: Sparkles },
+          { id: 'desktop', label: 'Desktop App', icon: Package },
         ].map(tab => (
           <button
             key={tab.id}
@@ -684,6 +686,13 @@ const TrainingBotSettings: React.FC = () => {
                 Reset to Default
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Desktop App Tab */}
+        {activeTab === 'desktop' && (
+          <div className="space-y-4">
+            <DesktopAppBuilder />
           </div>
         )}
       </div>
