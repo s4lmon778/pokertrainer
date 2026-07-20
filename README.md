@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri" alt="Tauri 2">
 </p>
 
-# PokerBot ♠️♥️♣️♦️
+# PokerTrainer ♠️♥️♣️♦️
 
 **Autonomous poker training & analysis platform** — play against configurable AI opponents, analyse hands with a GTO solver, and run autonomous training sessions on real poker sites via the desktop app.
 
