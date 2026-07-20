@@ -45,7 +45,7 @@ const App: React.FC = () => {
       }}>
         <div style={{ padding: '0 1rem 1rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem' }}>
           <h1 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--gold)' }}>
-            ♠ PokerTrainer
+            ♠ PokerBot
           </h1>
           <p style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', marginTop: 2 }}>
             Desktop v1.0.0

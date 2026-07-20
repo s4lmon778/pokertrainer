@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tool artifacts
+.codegraph/
+
+# Rust build artifacts
+packages/desktop/src-tauri/target/
+

@@ -1,4 +1,5 @@
 use base64::Engine;
+use image::ImageEncoder;
 use serde::{Deserialize, Serialize};
 
 /// A recognized playing card.
@@ -64,17 +65,27 @@ pub fn capture_screen() -> Result<String, String> {
 
         unsafe {
             // 1. Get desktop device context
-            let desktop_dc = GetDC(None).context("GetDC failed — no desktop DC")?;
+            let desktop_dc = GetDC(None);
+            if desktop_dc.is_invalid() {
+                return Err("GetDC failed — no desktop DC".to_string());
+            }
 
             // 2. Get screen dimensions
             let screen_w = GetDeviceCaps(desktop_dc, HORZRES);
             let screen_h = GetDeviceCaps(desktop_dc, VERTRES);
 
             // 3. Create compatible memory DC + bitmap
-            let mem_dc =
-                CreateCompatibleDC(desktop_dc).context("CreateCompatibleDC failed")?;
-            let bitmap =
-                CreateCompatibleBitmap(desktop_dc, screen_w, screen_h).context("CreateCompatibleBitmap failed")?;
+            let mem_dc = CreateCompatibleDC(desktop_dc);
+            if mem_dc.is_invalid() {
+                let _ = ReleaseDC(None, desktop_dc);
+                return Err("CreateCompatibleDC failed".to_string());
+            }
+            let bitmap = CreateCompatibleBitmap(desktop_dc, screen_w, screen_h);
+            if bitmap.is_invalid() {
+                let _ = DeleteDC(mem_dc);
+                let _ = ReleaseDC(None, desktop_dc);
+                return Err("CreateCompatibleBitmap failed".to_string());
+            }
             let old_obj = SelectObject(mem_dc, bitmap);
 
             // 4. BitBlt screen → memory DC
@@ -82,7 +93,7 @@ pub fn capture_screen() -> Result<String, String> {
                 mem_dc, 0, 0, screen_w, screen_h,
                 desktop_dc, 0, 0, SRCCOPY,
             )
-            .context("BitBlt failed")?;
+            .map_err(|e| format!("BitBlt failed: {e}"))?;
 
             // 5. Extract pixel data via GetDIBits
             let row_size = (screen_w * 4) as usize;
@@ -142,7 +153,7 @@ pub fn capture_screen() -> Result<String, String> {
                         &flipped,
                         screen_w as u32,
                         screen_h as u32,
-                        image::ColorType::Rgba8,
+                        image::ColorType::Rgba8.into(),
                     )
                     .map_err(|e| format!("PNG encode failed: {e}"))?;
             }

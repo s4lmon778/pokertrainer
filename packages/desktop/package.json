@@ -1,8 +1,8 @@
 {
-  "name": "@pokertrainer/desktop",
+  "name": "@pokerbot/desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "PokerTrainer Tauri desktop application",
+  "description": "PokerBot Tauri desktop application",
   "type": "module",
   "scripts": {
     "dev": "vite",

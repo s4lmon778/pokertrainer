@@ -8,7 +8,7 @@ mod session_recorder;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
-    format!("Hello, {name}! Welcome to PokerTrainer Desktop.")
+    format!("Hello, {name}! Welcome to PokerBot Desktop.")
 }
 
 pub fn run() {
@@ -39,5 +39,5 @@ pub fn run() {
             session_recorder::stop_recording,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running PokerTrainer");
+        .expect("error while running PokerBot");
 }

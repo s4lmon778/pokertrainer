@@ -1,130 +1,137 @@
-# PokerTrainer
+<p align="center">
+  <img src="https://img.shields.io/badge/status-active-success" alt="Active">
+  <img src="https://img.shields.io/github/v/release/s4lmon778/pokertrainer?label=version" alt="Version">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript" alt="TS 6">
+  <img src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri" alt="Tauri 2">
+</p>
 
-Interactive poker training application with GTO solver, bot AI, and strategy visualization.
+# PokerBot ♠️♥️♣️♦️
 
-## Features
+**Autonomous poker training & analysis platform** — play against configurable AI opponents, analyse hands with a GTO solver, and run autonomous training sessions on real poker sites via the desktop app.
 
-- **Poker Table**: Realistic Texas Hold'em with multi-way pots, side pots, and chip stacks
-- **Bot AI**: 4 personality archetypes (TAG, LAG, Nit, Balanced) with configurable aggression, bluffing, and mistake rates
-- **GTO Solver**: Discounted CFR solver with Pio-style strategy charts
-- **Training Bot**: Autonomous bot engine with strategy presets (GTO, Exploitative, Adaptive)
-- **Strategy Charts**: Color-coded hand matrices showing action frequencies
-- **Game History**: Detailed hand logs with human accuracy tracking
-- **Stats Dashboard**: Win rate, ROI, position stats, hand strength tracking
+## ✨ Features
 
-## Tech Stack
+### 🃏 Interactive Poker Table
+Realistic Texas Hold'em with multi-way pots, side pots, chip stacks, and full betting controls (fold/check/call/raise/all-in with keyboard shortcuts).
 
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS
-- **State**: Zustand
-- **Charts**: Recharts
-- **Icons**: Lucide React
-- **Testing**: Vitest
+### 🤖 AI Opponents
+4 distinct bot archetypes with configurable aggression, bluffing, and mistake rates:
+- **TAG** (Tight-Aggressive) — Classic winning style
+- **LAG** (Loose-Aggressive) — High-variance pressure
+- **Nit** — Premium hands only, fold everything else
+- **Balanced** — Mixed strategy with human-like imperfections
 
-## Getting Started
+### 🧮 GTO Solver
+Discounted Counterfactual Regret Minimization (DCFR) engine computing Nash equilibrium strategies. PioSolver-compatible output with interactive strategy charts.
 
+### 🎯 Training Bot (Desktop)
+Standalone autonomous bot engine that plays on real poker sites via screen capture and input simulation. Strategy presets:
+- **GTO** — Game Theory Optimal baseline
+- **Exploitative** — Adapts to opponent tendencies
+- **Adaptive** — Blends GTO + exploitation by sample size
+
+### 📊 Strategy Charts
+Color-coded hand matrices showing action frequencies (fold/check/bet/raise) for any board texture.
+
+### 📈 Stats Dashboard
+Win rate, ROI, position stats, hand strength categories, bluff performance, bankroll history — all tracked across sessions.
+
+### 🛡️ Coaching & Analysis
+Context-aware poker tips, risk overlay with real-time EV/pot odds, hand history with CSV/PGN export, mistake detection.
+
+### 🏗️ Desktop Automation (Windows)
+The included desktop app captures screen output from any poker client, reads cards via template-matching OCR, and simulates mouse/keyboard input with human-like motion curves — enabling fully autonomous play.
+
+## 📦 Download
+
+**[⬇️ Download Latest Release](https://github.com/s4lmon778/pokertrainer/releases/latest)**
+
+| Asset | Format |
+|-------|--------|
+| `PokerBot-*-Setup.exe` | Windows installer (NSIS) |
+| `PokerBot-*-en-US.msi` | Windows MSI package |
+
+**Requirements:** Windows 10/11 (64-bit), no Rust toolchain needed.
+
+## 🚀 Quick Start
+
+### Web App
 ```bash
-# Install dependencies
 npm install
-
-# Development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Run tests
-npx vitest run
+npm run dev       # → http://localhost:5173
+npm run build     # Production build
+npx vitest run    # Run 250+ tests
 ```
 
-## Project Structure
-
-```
-src/
-├── components/     # React components
-│   ├── GTOSolver.tsx       # GTO solver UI
-│   ├── PokerTable.tsx      # Main table visualization
-│   ├── StrategyChart.tsx   # Pio-style hand matrices
-│   ├── TrainingBotSettings.tsx  # Bot configuration UI
-│   └── ...
-├── engine/         # Core game logic
-│   ├── gto-solver/         # GTO solver (DCFR, equity, game tree)
-│   ├── strategies/         # Bot strategies (GTO, exploitative, adaptive)
-│   └── trainingBot.ts      # Training bot engine
-├── store/          # State management
-│   └── gameStore.ts        # Zustand store
-├── utils/          # Utilities
-│   ├── botEngine.ts        # Bot decision engine
-│   ├── handEvaluator.ts    # Hand strength evaluation
-│   ├── sidePot.ts          # Side pot calculation
-│   └── equity.ts           # Equity calculations
-└── types/          # TypeScript types
-    └── card.ts             # Card, Player, GameState types
+### Desktop Bot (Development)
+```bash
+cd packages/desktop
+npm install
+npm run tauri dev       # Dev mode with hot reload
+npm run tauri build     # Production installer
 ```
 
-## GTO Solver
+## 🏗️ Project Structure
 
-The GTO solver uses Discounted Counterfactual Regret Minimization (DCFR) to compute Nash equilibrium strategies.
-
-### Usage
-
-```typescript
-import { solve, getStrategyForHand } from './engine/gto-solver/solver';
-
-const result = solve(board, heroRange, villainRange, {
-  stackSize: 100,
-  potSize: 2,
-  iterations: 100,
-});
-
-const strategy = getStrategyForHand(result, heroHand, board);
+```
+pokertrainer/
+├── packages/
+│   ├── engine/              # Core poker engine (npm workspace)
+│   │   ├── gto-solver/      # DCFR solver (types, game tree, equity)
+│   │   └── strategies/      # Bot strategies (GTO, exploitative, adaptive)
+│   └── desktop/             # Tauri desktop app
+│       └── src-tauri/       # Rust backend (screen capture, input sim)
+├── src/                     # Web app (web-ui package)
+│   ├── components/          # React components
+│   │   ├── PokerTable.tsx
+│   │   ├── GTOSolver.tsx
+│   │   ├── StrategyChart.tsx
+│   │   └── TrainingBotSettings.tsx
+│   ├── store/               # Zustand state management
+│   └── utils/               # Utilities
+├── docs/                    # Documentation
+└── README.md               ← you are here
 ```
 
-### Components
-
-- `GTOSolver`: Interactive solver with range selectors
-- `StrategyChart`: Color-coded hand frequency matrix
-- `MultiActionChart`: Side-by-side action comparison
-
-## Training Bot
-
-The Training Bot is a detachable engine for autonomous poker play.
-
-### Strategies
-
-- **GTO**: Game Theory Optimal baseline strategy
-- **Exploitative**: Adapts to opponent tendencies
-- **Adaptive**: Learns and adjusts over time
-
-### Configuration
-
-Access via the "Training Bot" tab in the app UI, or programmatically:
-
-```typescript
-import { useGameStore } from './store/gameStore';
-
-const updateConfig = useGameStore.getState().updateTrainingBotConfig;
-updateConfig({ strategy: 'gto', aggression: 0.7 });
-```
-
-## Testing
+## 🧪 Testing
 
 ```bash
-# Run all tests
-npx vitest run
-
-# Run specific test file
-npx vitest run src/utils/botEngine.test.ts
-
-# Watch mode
-npx vitest
+npx vitest run              # All 250+ tests
+npx vitest run src/utils/botEngine.test.ts  # Single file
+npx vitest                  # Watch mode
+npm run build               # Verify clean build
 ```
 
-## Credits
+## 🔧 Tech Stack
 
-Based on concepts from:
-- [shark-2.0](https://github.com/24parida/shark-2.0) — C++ CFR solver architecture
-- PioSolver — Strategy chart visualization
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19 + TypeScript 6 + Vite (Rolldown) |
+| **Styling** | Tailwind CSS 3.4 with custom poker theme |
+| **State** | Zustand 5 (localStorage persistence) |
+| **Charts** | Recharts + Lucide React icons |
+| **Desktop** | Tauri 2 (Rust backend) |
+| **Testing** | Vitest 4 (250+ tests) |
+| **CI/CD** | GitHub Actions → GitHub Pages |
 
-## License
+## 📖 Documentation
+
+- [Training Bot Architecture](docs/TRAINING_BOT.md) — Strategy system, presets, configuration
+- [GTO Solver Implementation](docs/GTO_SOLVER_IMPLEMENTATION.md) — DCFR algorithm, game tree, API
+- [Desktop App Blueprint](docs/DESKTOP_APP_BLUEPRINT.md) — Screen capture, input simulation, multi-table
+- [Changelog](CHANGELOG.md) — Version history
+
+## 🤝 Contributing
+
+PRs welcome. See the [docs](docs/) for architecture guides.
+
+## 🧠 Credits
+
+- [shark-2.0](https://github.com/24parida/shark-2.0) — Original C++ DCFR solver architecture
+- PioSolver — Strategy chart visualization inspiration
+
+## 📄 License
 
 MIT

@@ -1,7 +1,7 @@
 {
   "name": "@pokertrainer/engine",
   "version": "1.0.0",
-  "description": "PokerTrainer core poker engine — GTO solver, Training Bot, hand evaluator",
+  "description": "PokerBot core poker engine — GTO solver, Training Bot, hand evaluator",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

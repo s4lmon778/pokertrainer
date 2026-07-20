@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to PokerTrainer will be documented in this file.
+All notable changes to PokerBot will be documented in this file.
 
 ## [1.0.0] — 2026-07-16
 
@@ -8,6 +8,7 @@ All notable changes to PokerTrainer will be documented in this file.
 - **Poker Game Engine:** Full Texas Hold'em game logic with blinds, betting rounds (preflop/flop/turn/river), showdown evaluation
 - **AI Opponents:** Multiple bot personalities (Tight-Aggressive, Loose-Aggressive, Tight-Passive, Balanced) with realistic bet sizing, bluff logic, and tilt mechanics
 - **Training Bot (T-Bot):** Configurable AI bot with adjustable aggression, bluff frequency, accuracy, and reaction time
+- **PokerBot Desktop App:** Standalone Tauri 2 desktop application for autonomous play on real poker sites via screen capture and input simulation
 - **Side Pot Calculator:** Correct multi-way all-in side pot distribution algorithm
 - **Hand Evaluator:** Poker hand ranking engine supporting all 10 hand categories with tie-breaking
 - **Equity Calculator:** Preflop and post-flop win probability estimation with opponent count penalty

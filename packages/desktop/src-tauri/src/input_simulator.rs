@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use windows::Win32::UI::Input::KeyboardAndMouse::MOUSE_EVENT_FLAGS;
 
 /// Button coordinate mapping for a specific poker client.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -174,7 +175,7 @@ fn set_cursor_pos(x: i32, y: i32) -> Result<(), String> {
 unsafe fn send_mouse_input(
     x: i32,
     y: i32,
-    flags: u32,
+    flags: MOUSE_EVENT_FLAGS,
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
@@ -326,7 +327,7 @@ pub fn type_keys(keys: Vec<String>) -> Result<(), String> {
                 let mut input: INPUT = unsafe { std::mem::zeroed() };
                 input.r#type = INPUT_KEYBOARD;
                 input.Anonymous.ki = KEYBDINPUT {
-                    wVk: vk,
+                    wVk: VIRTUAL_KEY(vk),
                     wScan: 0,
                     dwFlags: KEYEVENTF_KEYUP, // will be 0 for keydown — set correctly below
                     time: 0,
@@ -352,7 +353,7 @@ pub fn type_keys(keys: Vec<String>) -> Result<(), String> {
                 let mut input: INPUT = unsafe { std::mem::zeroed() };
                 input.r#type = INPUT_KEYBOARD;
                 input.Anonymous.ki = KEYBDINPUT {
-                    wVk: vk,
+                    wVk: VIRTUAL_KEY(vk),
                     wScan: 0,
                     dwFlags: KEYEVENTF_KEYUP,
                     time: 0,

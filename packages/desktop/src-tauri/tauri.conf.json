@@ -1,5 +1,5 @@
 {
-  "identifier": "com.pokertrainer.desktop",
+  "identifier": "com.pokerbot.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -20,7 +20,7 @@
   "app": {
     "windows": [
       {
-        "title": "PokerTrainer",
+        "title": "PokerBot",
         "width": 1200,
         "height": 800,
         "resizable": true,

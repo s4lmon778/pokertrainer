@@ -1,3 +1,4 @@
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 /// Axis-aligned rectangle used to specify image regions.
