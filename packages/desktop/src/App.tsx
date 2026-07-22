@@ -40,6 +40,8 @@ const App: React.FC = () => {
     auto_fold_weak: true, max_tables: 4,
   });
   const [isRunning, setIsRunning] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load config on mount
@@ -55,30 +57,45 @@ const App: React.FC = () => {
     return () => { unlisten.then(f => f()); };
   }, []);
 
-  // Poll bot status + window detection every 2s
+  // Poll bot status every 2s; scan windows every 5s (less frequent)
   useEffect(() => {
-    const poll = async () => {
+    const pollStatus = async () => {
       try {
         const tables: BotTableStatus[] = await invoke('get_bot_status');
         setBotTables(tables);
         setIsRunning(tables.some(t => t.status === 'running'));
       } catch { /* ignore */ }
+    };
+    const pollWindows = async () => {
       try {
         const windows: TableWindow[] = await invoke('find_poker_tables');
         setDetectedWindows(windows);
       } catch { /* ignore */ }
     };
-    poll();
-    pollRef.current = setInterval(poll, 2000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    pollStatus();
+    pollWindows();
+    const statusInt = setInterval(pollStatus, 2000);
+    const winInt = setInterval(pollWindows, 5000);
+    pollRef.current = statusInt;
+    return () => { clearInterval(statusInt); clearInterval(winInt); };
   }, []);
 
   const handleStart = useCallback(async () => {
+    setStartError(null);
+    setIsStarting(true);
     try {
       const windows: TableWindow[] = await invoke('find_poker_tables');
-      if (windows.length === 0) { return; }
+      if (windows.length === 0) {
+        setStartError('No PokerStars tables detected. Open a table first, then try again.');
+        setIsStarting(false);
+        return;
+      }
       await invoke('start_bot', { windows });
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      setStartError(String(e));
+    } finally {
+      setIsStarting(false);
+    }
   }, []);
 
   const handleStop = useCallback(async () => {
@@ -151,6 +168,9 @@ const App: React.FC = () => {
             onStop={handleStop}
             onPause={handlePause}
             isRunning={anyRunning}
+            isStarting={isStarting}
+            startError={startError}
+            onDismissError={() => setStartError(null)}
           />
         )}
         {activeTab === 'tables' && (
@@ -182,11 +202,15 @@ interface DashboardProps {
   runningCount: number; isPLPositive: boolean;
   onStart: () => void; onStop: () => void; onPause: () => void;
   isRunning: boolean;
+  isStarting: boolean;
+  startError: string | null;
+  onDismissError: () => void;
 }
 
 const DashboardPanel: React.FC<DashboardProps> = ({
   tables, totalPL, totalHands, runningCount, isPLPositive,
   onStart, onStop, onPause, isRunning,
+  isStarting, startError, onDismissError,
 }) => (
   <div className="panel">
     <div className="panel-header">
@@ -195,9 +219,11 @@ const DashboardPanel: React.FC<DashboardProps> = ({
         <p className="panel-subtitle">Real-time bot status and performance across all tables.</p>
       </div>
       <div className="panel-actions">
-        <button className={`btn ${!isRunning ? 'btn-primary' : 'btn-secondary'}`} onClick={isRunning ? onStop : onStart}>
-          {isRunning ? <Square size={14} /> : <Play size={14} />}
-          {isRunning ? 'Stop All' : 'Start Bot'}
+        <button className={`btn ${!isRunning ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={isRunning ? onStop : onStart}
+          disabled={isStarting}>
+          {isStarting ? <>⏳ Starting...</> : isRunning ? <Square size={14} /> : <Play size={14} />}
+          {isStarting ? ' Scanning...' : isRunning ? 'Stop All' : 'Start Bot'}
         </button>
         {isRunning && (
           <button className="btn btn-secondary" onClick={onPause}>
@@ -221,6 +247,14 @@ const DashboardPanel: React.FC<DashboardProps> = ({
         value={totalHands > 0 ? `${(totalPL / totalHands * 100).toFixed(2)} bb/100` : '—'}
       />
     </div>
+
+    {/* Error banner */}
+    {startError && (
+      <div className="error-banner">
+        <span>{startError}</span>
+        <button className="error-dismiss" onClick={onDismissError}>×</button>
+      </div>
+    )}
 
     {/* Table cards */}
     {tables.length === 0 ? (

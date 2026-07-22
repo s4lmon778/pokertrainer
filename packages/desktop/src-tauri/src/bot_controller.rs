@@ -61,7 +61,6 @@ pub struct BotStatusEvent {
 struct BotInstance {
     stop_flag: Arc<AtomicBool>,
     status: Arc<Mutex<TableBotStatus>>,
-    last_state: Arc<Mutex<Option<TableState>>>,
 }
 
 /// Global registry of running bot instances.
@@ -113,17 +112,16 @@ fn eval_hand_strength(hero: &[Card], community: &[Card]) -> i32 {
     let high_card_strength: i32 = hero_ranks.iter().map(|r| rank_value(r)).sum();
 
     // Scoring
-    let mut score = 0;
-    if quads > 0 { score = 5; }
-    else if trips > 0 && pairs >= 2 { score = 5; } // full house
-    else if trips > 0 { score = 4; }
-    else if pairs >= 2 { score = 3; }
-    else if pairs == 1 { score = 2; }
-    else if suited && connected && high_card_strength >= 18 { score = 2; } // suited connector broadway
-    else if suited && high_card_strength >= 15 { score = 1; }
-    else if connected && high_card_strength >= 15 { score = 1; }
-    else if high_card_strength >= 15 { score = 1; }
-    else { score = 0; }
+    let score: i32 = if quads > 0 { 5 }
+    else if trips > 0 && pairs >= 2 { 5 } // full house
+    else if trips > 0 { 4 }
+    else if pairs >= 2 { 3 }
+    else if pairs == 1 { 2 }
+    else if suited && connected && high_card_strength >= 18 { 2 } // suited connector broadway
+    else if suited && high_card_strength >= 15 { 1 }
+    else if connected && high_card_strength >= 15 { 1 }
+    else if high_card_strength >= 15 { 1 }
+    else { 0 };
 
     score
 }
@@ -238,16 +236,13 @@ pub fn start_bot_table(win: &TableWindowInfo, app: AppHandle) -> Result<(), Stri
             .unwrap_or_default()
             .as_secs(),
     }));
-    let last_state = Arc::new(Mutex::new(None::<TableState>));
-
     let sf = stop_flag.clone();
     let st = status.clone();
-    let ls = last_state.clone();
     let app_clone = app.clone();
     let win_info = win.clone();
 
     thread::spawn(move || {
-        bot_loop(sf, st, ls, app_clone, win_info);
+        bot_loop(sf, st, app_clone, win_info);
     });
 
     map.insert(
@@ -255,7 +250,6 @@ pub fn start_bot_table(win: &TableWindowInfo, app: AppHandle) -> Result<(), Stri
         BotInstance {
             stop_flag,
             status,
-            last_state,
         },
     );
 
@@ -269,12 +263,9 @@ pub fn start_bot_table(win: &TableWindowInfo, app: AppHandle) -> Result<(), Stri
 fn bot_loop(
     stop_flag: Arc<AtomicBool>,
     status: Arc<Mutex<TableBotStatus>>,
-    _last_state: Arc<Mutex<Option<TableState>>>,
     app: AppHandle,
     win: TableWindowInfo,
 ) {
-    let _cfg = BOT_CONFIG.lock().expect("BOT_CONFIG poisoned").clone();
-    let mut last_hand_profit = 0.0f64;
     let mut hand_profits: Vec<f64> = Vec::new();
     let mut prev_stack = 1000.0;
     let mut last_phase = GamePhase::Unknown;
@@ -293,36 +284,16 @@ fn bot_loop(
                     s.status = "error".to_string();
                 }
                 emit_all_status(&app);
-                thread::sleep(Duration::from_secs(2));
+                thread::sleep(Duration::from_secs(3));
                 continue;
             }
         };
 
-        // Track hand profit: when a new hand starts (preflop with fresh cards), record previous hand's result
-        if table_state.phase == GamePhase::Preflop
-            && last_phase != GamePhase::Preflop
-            && acted_this_hand
-        {
-            let current_stack = table_state.hero_stack;
-            let hand_result = current_stack - prev_stack;
-            if hand_result != 0.0 {
-                last_hand_profit = hand_result;
-                hand_profits.push(hand_result);
-                if let Ok(mut s) = status.lock() {
-                    s.profit_loss += hand_result;
-                    s.hands_played += 1;
-                    if !hand_profits.is_empty() {
-                        let total: f64 = s.profit_loss;
-                        s.win_rate = (total / s.hands_played as f64) * 100.0;
-                    }
-                }
-            }
-            prev_stack = current_stack;
-            acted_this_hand = false;
-        }
+        // Only act if hero has cards AND it's hero's turn
+        let hero_has_cards = table_state.hero_cards.len() >= 2
+            && table_state.hero_cards.iter().any(|c| c.rank != "?");
 
-        // If hero's turn, make a decision
-        if table_state.is_hero_turn && !acted_this_hand {
+        if table_state.is_hero_turn && hero_has_cards && !acted_this_hand {
             let cfg = BOT_CONFIG.lock().expect("BOT_CONFIG poisoned").clone();
             let (action, amount) = decide_action(&table_state, &cfg);
 
@@ -353,6 +324,29 @@ fn bot_loop(
                 }
             }
         }
+
+        // Track hand profit: when a new hand starts, record previous hand's result
+        if table_state.phase == GamePhase::Preflop
+            && last_phase != GamePhase::Preflop
+            && acted_this_hand
+        {
+            let hand_result = table_state.hero_stack - prev_stack;
+            if hand_result != 0.0 {
+                hand_profits.push(hand_result);
+                if let Ok(mut s) = status.lock() {
+                    s.profit_loss += hand_result;
+                    s.hands_played += 1;
+                    if !hand_profits.is_empty() {
+                        let total: f64 = s.profit_loss;
+                        s.win_rate = (total / s.hands_played as f64) * 100.0;
+                    }
+                }
+            }
+            prev_stack = table_state.hero_stack;
+            acted_this_hand = false;
+        }
+
+
 
         last_phase = table_state.phase.clone();
         emit_all_status(&app);
@@ -410,7 +404,7 @@ fn run_one_cycle(win: &TableWindowInfo) -> Result<TableState, String> {
 
 /// Start bot on all detected PokerStars tables.
 #[tauri::command]
-pub fn start_bot(app: AppHandle, windows: Vec<TableWindowInfo>) -> Result<(), String> {
+pub async fn start_bot(app: AppHandle, windows: Vec<TableWindowInfo>) -> Result<(), String> {
     for win in &windows {
         start_bot_table(win, app.clone())?;
     }

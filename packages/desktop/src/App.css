@@ -137,6 +137,20 @@ body {
 }
 .empty-sub { font-size: 0.75rem; margin-top: 0.25rem; }
 
+/* Error banner */
+.error-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1rem; border-radius: 0.5rem;
+  background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444; font-size: 0.8125rem;
+}
+.error-dismiss {
+  background: none; border: none; color: #ef4444;
+  font-size: 1.25rem; cursor: pointer; padding: 0 0.25rem;
+  opacity: 0.7;
+}
+.error-dismiss:hover { opacity: 1; }
+
 /* Window grid */
 .window-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; }
 .window-card {

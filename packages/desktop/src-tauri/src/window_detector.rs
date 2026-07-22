@@ -81,38 +81,31 @@ extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
 }
 
 /// Scan the desktop for PokerStars table windows.
-pub fn scan_for_tables() -> Result<Vec<TableWindowInfo>, String> {
-    let mut ctx = EnumCtx {
-        windows: Vec::new(),
-    };
-
-    unsafe {
-        EnumWindows(
-            Some(enum_proc),
-            LPARAM(&mut ctx as *mut EnumCtx as isize),
-        )
-        .map_err(|e| format!("EnumWindows failed: {e}"))?;
-    }
-
-    // Update cache
-    if let Ok(mut cache) = WINDOW_CACHE.lock() {
-        *cache = Some(ctx.windows.clone());
-    }
-
-    Ok(ctx.windows)
-}
-
-/// Get cached table windows (no re-scan).
-pub fn get_cached_tables() -> Vec<TableWindowInfo> {
-    WINDOW_CACHE
-        .lock()
-        .ok()
-        .and_then(|g| g.clone())
-        .unwrap_or_default()
-}
-
-/// Tauri command: scan for PokerStars table windows.
+/// Runs in a spawned thread so it doesn't block the IPC handler.
 #[tauri::command]
-pub fn find_poker_tables() -> Result<Vec<TableWindowInfo>, String> {
-    scan_for_tables()
+pub async fn find_poker_tables() -> Result<Vec<TableWindowInfo>, String> {
+    // EnumWindows must run on the same thread that owns the message queue.
+    // We spawn a dedicated OS thread and join it.
+    let handle = std::thread::spawn(move || {
+        let mut ctx = EnumCtx {
+            windows: Vec::new(),
+        };
+
+        unsafe {
+            EnumWindows(
+                Some(enum_proc),
+                LPARAM(&mut ctx as *mut EnumCtx as isize),
+            )
+            .map_err(|e| format!("EnumWindows failed: {e}"))?;
+        }
+
+        // Update cache
+        if let Ok(mut cache) = WINDOW_CACHE.lock() {
+            *cache = Some(ctx.windows.clone());
+        }
+
+        Ok::<Vec<TableWindowInfo>, String>(ctx.windows)
+    });
+
+    handle.join().map_err(|_| "Window scan thread panicked".to_string())?
 }
