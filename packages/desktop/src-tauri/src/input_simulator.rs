@@ -32,6 +32,14 @@ fn client_coordinates(client: &str) -> Result<CoordinateMap, String> {
             all_in_button: (660, 520),
             bet_slider: (340, 470, 320, 20),
         }),
+        "acr" => Ok(CoordinateMap {
+            client: "ACR".to_string(),
+            fold_button: (270, 640),
+            call_button: (420, 640),
+            raise_button: (530, 640),
+            all_in_button: (660, 640),
+            bet_slider: (380, 600, 200, 20),
+        }),
         "ggpoker" | "gg poker" => Ok(CoordinateMap {
             client: "GG Poker".to_string(),
             fold_button: (220, 540),

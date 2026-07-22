@@ -309,7 +309,7 @@ fn bot_loop(
             match input_simulator::execute_poker_action_internal(
                 &action,
                 amount,
-                "PokerStars",
+                &win.client_type,
             ) {
                 Ok(()) => {
                     acted_this_hand = true;
@@ -395,6 +395,7 @@ fn run_one_cycle(win: &TableWindowInfo) -> Result<TableState, String> {
         win.y,
         win.width,
         win.height,
+        &win.client_type,
     );
 
     Ok(state)

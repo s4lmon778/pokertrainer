@@ -137,7 +137,7 @@ pub fn detect_table_region_internal(img: &image::RgbaImage) -> TableRegion {
         for x in (0..img_w as usize).step_by(sample_step) {
             let px = img.get_pixel(x as u32, y as u32);
             let (r, g, b) = (px[0], px[1], px[2]);
-            if r < 30 && g >= 60 && g <= 160 && b < 30 {
+            if r < 80 && g >= 50 && g <= 160 && b < 60 {
                 green_count += 1;
                 let ix = x as i32; let iy = y as i32;
                 if ix < min_x { min_x = ix; } if iy < min_y { min_y = iy; }
@@ -321,7 +321,7 @@ pub fn detect_table_region(screen_data: String) -> Result<TableRegion, String> {
         for x in (0..img_w as usize).step_by(sample_step) {
             let px = img.get_pixel(x as u32, y as u32);
             let (r, g, b) = (px[0], px[1], px[2]);
-            if r < 30 && g >= 60 && g <= 160 && b < 30 {
+            if r < 80 && g >= 50 && g <= 160 && b < 60 {
                 green_count += 1;
                 let ix = x as i32;
                 let iy = y as i32;

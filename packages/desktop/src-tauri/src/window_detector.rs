@@ -5,6 +5,24 @@ use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowRect, GetWindowTextW, IsWindowVisible,
 };
 
+/// Supported poker clients.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PokerClient {
+    PokerStars,
+    ACR,
+    Unknown,
+}
+
+impl PokerClient {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PokerClient::PokerStars => "PokerStars",
+            PokerClient::ACR => "ACR",
+            PokerClient::Unknown => "Unknown",
+        }
+    }
+}
+
 /// Info about a detected poker table window.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TableWindowInfo {
@@ -15,6 +33,7 @@ pub struct TableWindowInfo {
     pub width: i32,
     pub height: i32,
     pub is_active: bool,
+    pub client_type: String, // "PokerStars" | "ACR" | "Unknown"
 }
 
 /// Cache of last-detected windows (polled every few seconds).
@@ -28,15 +47,43 @@ struct EnumCtx {
 /// Check if a window title looks like a PokerStars table.
 fn is_pokerstars_table(title: &str) -> bool {
     let lower = title.to_lowercase();
-    // PokerStars table titles look like: "Table Name 6-max" or "Table Name"
-    // They also may not have obvious markers — but they're NOT the lobby or settings
     !lower.contains("lobby")
         && !lower.contains("settings")
         && !lower.contains("cashier")
         && !lower.contains("home")
         && !lower.contains("store")
         && !lower.contains("challenge")
-        && (lower.contains("hold'em") || lower.contains("omaha") || lower.contains("table"))
+        && (lower.contains("hold'em") || lower.contains("omaha") || lower.contains("table") || lower.contains("tournament"))
+}
+
+/// Check if a window title looks like an Americas Cardroom (ACR / WPN) table.
+fn is_acr_table(title: &str) -> bool {
+    let lower = title.to_lowercase();
+    // ACR table titles typically contain:
+    // - "americas cardroom" 
+    // - "table #" followed by digits
+    // - Winning Poker Network titles
+    // Exclude non-table windows
+    if lower.contains("lobby") || lower.contains("settings") || lower.contains("cashier")
+        || lower.contains("home") || lower.contains("store")
+    {
+        return false;
+    }
+    lower.contains("americas cardroom")
+        || lower.contains("acr")
+        || (lower.contains("table") && lower.contains('#'))
+        || (lower.contains("table") && lower.chars().any(|c| c.is_numeric()))
+}
+
+/// Detect which poker client a window belongs to.
+fn detect_client(title: &str) -> PokerClient {
+    if is_pokerstars_table(title) {
+        PokerClient::PokerStars
+    } else if is_acr_table(title) {
+        PokerClient::ACR
+    } else {
+        PokerClient::Unknown
+    }
 }
 
 extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -55,8 +102,9 @@ extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
         }
         let title = String::from_utf16_lossy(&buf[..len as usize]);
 
-        // Filter to PokerStars tables
-        if !is_pokerstars_table(&title) {
+        // Detect client
+        let client = detect_client(&title);
+        if client == PokerClient::Unknown {
             return TRUE;
         }
 
@@ -74,18 +122,17 @@ extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
             width: rect.right - rect.left,
             height: rect.bottom - rect.top,
             is_active: false,
+            client_type: client.as_str().to_string(),
         });
 
         TRUE
     }
 }
 
-/// Scan the desktop for PokerStars table windows.
+/// Scan the desktop for poker table windows (PokerStars + ACR).
 /// Runs in a spawned thread so it doesn't block the IPC handler.
 #[tauri::command]
 pub async fn find_poker_tables() -> Result<Vec<TableWindowInfo>, String> {
-    // EnumWindows must run on the same thread that owns the message queue.
-    // We spawn a dedicated OS thread and join it.
     let handle = std::thread::spawn(move || {
         let mut ctx = EnumCtx {
             windows: Vec::new(),
