@@ -51,6 +51,115 @@ fn random_jitter(val: i32, seed: &mut u64) -> i32 {
     val + r - 3 // ±3 px
 }
 
+// ── Internal API (used by bot_controller without Tauri) ──
+
+/// Capture screen and return base64 PNG (internal, no Tauri).
+pub fn capture_screen_internal() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        
+        
+        
+        use windows::Win32::Graphics::Gdi::*;
+
+        unsafe {
+            let desktop_dc = GetDC(None);
+            if desktop_dc.is_invalid() {
+                return Err("GetDC failed".to_string());
+            }
+            let screen_w = GetDeviceCaps(desktop_dc, HORZRES);
+            let screen_h = GetDeviceCaps(desktop_dc, VERTRES);
+            let mem_dc = CreateCompatibleDC(desktop_dc);
+            if mem_dc.is_invalid() { return Err("CreateCompatibleDC failed".to_string()); }
+            let bitmap = CreateCompatibleBitmap(desktop_dc, screen_w, screen_h);
+            if bitmap.is_invalid() { return Err("CreateCompatibleBitmap failed".to_string()); }
+            let old_obj = SelectObject(mem_dc, bitmap);
+            BitBlt(mem_dc, 0, 0, screen_w, screen_h, desktop_dc, 0, 0, SRCCOPY)
+                .map_err(|e| format!("BitBlt failed: {e}"))?;
+
+            let row_size = (screen_w * 4) as usize;
+            let total_size = row_size * screen_h as usize;
+            let mut pixels: Vec<u8> = vec![0u8; total_size];
+            let mut bmi = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    biWidth: screen_w,
+                    biHeight: screen_h,
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    biCompression: BI_RGB.0 as u32,
+                    biSizeImage: total_size as u32,
+                    biXPelsPerMeter: 0,
+                    biYPelsPerMeter: 0,
+                    biClrUsed: 0,
+                    biClrImportant: 0,
+                },
+                bmiColors: [RGBQUAD::default(); 1],
+            };
+            let scan_lines = GetDIBits(mem_dc, bitmap, 0, screen_h as u32,
+                Some(pixels.as_mut_ptr() as *mut _), &mut bmi, DIB_RGB_COLORS);
+            if scan_lines == 0 { return Err("GetDIBits failed".to_string()); }
+
+            let mut flipped = vec![0u8; total_size];
+            for y in 0..screen_h as usize {
+                let src_row = (screen_h as usize - 1 - y) * row_size;
+                let dst_row = y * row_size;
+                flipped[dst_row..dst_row + row_size].copy_from_slice(&pixels[src_row..src_row + row_size]);
+            }
+            for px in flipped.chunks_exact_mut(4) { px.swap(0, 2); }
+
+            let mut png_buf = Vec::new();
+            {
+                let encoder = image::codecs::png::PngEncoder::new(&mut png_buf);
+                encoder.write_image(&flipped, screen_w as u32, screen_h as u32, image::ColorType::Rgba8.into())
+                    .map_err(|e| format!("PNG encode failed: {e}"))?;
+            }
+
+            SelectObject(mem_dc, old_obj);
+            let _ = DeleteObject(bitmap);
+            let _ = DeleteDC(mem_dc);
+            let _ = ReleaseDC(None, desktop_dc);
+
+            Ok(base64::engine::general_purpose::STANDARD.encode(&png_buf))
+        }
+    }
+    #[cfg(not(target_os = "windows"))] { Err("Screen capture only on Windows".to_string()) }
+}
+
+/// Detect table region from an already-loaded RgbaImage (internal).
+pub fn detect_table_region_internal(img: &image::RgbaImage) -> TableRegion {
+    let (img_w, img_h) = img.dimensions();
+    let mut min_x = img_w as i32; let mut min_y = img_h as i32;
+    let mut max_x = 0i32; let mut max_y = 0i32;
+    let mut green_count = 0u32;
+    let sample_step = 4usize;
+    for y in (0..img_h as usize).step_by(sample_step) {
+        for x in (0..img_w as usize).step_by(sample_step) {
+            let px = img.get_pixel(x as u32, y as u32);
+            let (r, g, b) = (px[0], px[1], px[2]);
+            if r < 30 && g >= 60 && g <= 160 && b < 30 {
+                green_count += 1;
+                let ix = x as i32; let iy = y as i32;
+                if ix < min_x { min_x = ix; } if iy < min_y { min_y = iy; }
+                if ix > max_x { max_x = ix; } if iy > max_y { max_y = iy; }
+            }
+        }
+    }
+    if green_count < 10 {
+        return TableRegion { x: 0, y: 0, width: img_w as i32, height: img_h as i32,
+            detected_players: vec![], current_phase: "unknown".to_string(),
+            community_cards: vec![], pot_size: 0.0 };
+    }
+    let pad = 10i32;
+    TableRegion {
+        x: (min_x - pad).max(0), y: (min_y - pad).max(0),
+        width: ((max_x - min_x) + 2 * pad).min(img_w as i32 - (min_x - pad).max(0)),
+        height: ((max_y - min_y) + 2 * pad).min(img_h as i32 - (min_y - pad).max(0)),
+        detected_players: vec![], current_phase: "detected".to_string(),
+        community_cards: vec![], pot_size: 0.0,
+    }
+}
+
 // ── Tauri Commands ──
 
 /// Capture the primary display and return a base64-encoded PNG image.
@@ -58,9 +167,9 @@ fn random_jitter(val: i32, seed: &mut u64) -> i32 {
 pub fn capture_screen() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        use std::io::Cursor;
-        use windows::core::*;
-        use windows::Win32::Foundation::*;
+        
+        
+        
         use windows::Win32::Graphics::Gdi::*;
 
         unsafe {
@@ -146,7 +255,7 @@ pub fn capture_screen() -> Result<String, String> {
             // 7. Encode to PNG
             let mut png_buf = Vec::new();
             {
-                let mut encoder =
+                let encoder =
                     image::codecs::png::PngEncoder::new(&mut png_buf);
                 encoder
                     .write_image(

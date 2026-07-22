@@ -2263,9 +2263,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pokertrainer"
-version = "1.0.0"
+name = "pokerbot"
+version = "1.1.0"
 dependencies = [
+ "anyhow",
  "base64 0.22.1",
  "flate2",
  "image",

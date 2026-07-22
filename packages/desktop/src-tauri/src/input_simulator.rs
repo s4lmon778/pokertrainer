@@ -211,6 +211,39 @@ unsafe fn send_mouse_input(
     }
 }
 
+// ── Internal API (called from bot_controller without Tauri) ──
+
+/// Execute a poker action from inside the bot thread (no Tauri dependency).
+pub fn execute_poker_action_internal(
+    action: &str,
+    _amount: f64,
+    client: &str,
+) -> Result<(), String> {
+    let coords = client_coordinates(client)?;
+    let mut seed = 557u64;
+
+    let target = match action.to_lowercase().as_str() {
+        "fold" => coords.fold_button,
+        "call" => coords.call_button,
+        "raise" => coords.raise_button,
+        "all-in" | "allin" => coords.all_in_button,
+        "check" => return Ok(()),
+        _ => return Err(format!("Unknown action: {action}")),
+    };
+
+    // 1. Smooth movement to target
+    let dur = movement_duration_ms(&mut seed) as i32;
+    move_mouse_smooth(target.0, target.1, dur)?;
+
+    // 2. Human-like thinking pause
+    std::thread::sleep(std::time::Duration::from_millis(human_delay_ms(&mut seed)));
+
+    // 3. Click the action button
+    click_at(target.0, target.1, "left".to_string())?;
+
+    Ok(())
+}
+
 // ── Tauri Commands ──
 
 /// Move the mouse cursor smoothly along a Bézier curve to (x, y).
@@ -266,7 +299,7 @@ pub fn click_at(x: i32, y: i32, button: String) -> Result<(), String> {
         use windows::Win32::UI::Input::KeyboardAndMouse::*;
 
         let mut seed = 223u64;
-        let (start_x, start_y) = get_cursor_pos()?;
+        let (_start_x, _start_y) = get_cursor_pos()?;
         let dur = movement_duration_ms(&mut seed) as i32;
 
         // 1. Natural movement to target
@@ -389,7 +422,7 @@ fn key_name_to_vk(name: &str) -> Result<u16, String> {
     if name.len() == 1 {
         let ch = name.chars().next().unwrap();
         return match ch {
-            'a'..='z' => Ok((ch.to_ascii_uppercase() as u16)),
+            'a'..='z' => Ok(ch.to_ascii_uppercase() as u16 ),
             'A'..='Z' => Ok(ch as u16),
             '0'..='9' => Ok(ch as u16),
             ' ' => Ok(0x20),          // VK_SPACE

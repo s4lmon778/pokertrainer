@@ -231,8 +231,8 @@ pub fn detect_chip_count(
             let tr = gray[(y - 1) * rw + (x + 1)] as i32;
             let bl = gray[(y + 1) * rw + (x - 1)] as i32;
             let br = gray[(y + 1) * rw + (x + 1)] as i32;
-            let t = gray[(y - 1) * rw + x] as i32;
-            let b = gray[(y + 1) * rw + x] as i32;
+            let _t = gray[(y - 1) * rw + x] as i32;
+            let _b = gray[(y + 1) * rw + x] as i32;
             let l = gray[y * rw + (x - 1)] as i32;
             let r = gray[y * rw + (x + 1)] as i32;
 

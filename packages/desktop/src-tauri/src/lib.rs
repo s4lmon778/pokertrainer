@@ -1,8 +1,10 @@
-use tauri::Manager;
 
 mod screen_capture;
 mod input_simulator;
 mod card_recognition;
+mod window_detector;
+mod table_scanner;
+mod bot_controller;
 mod multi_table;
 mod session_recorder;
 
@@ -29,10 +31,20 @@ pub fn run() {
             input_simulator::click_at,
             input_simulator::type_keys,
             input_simulator::execute_poker_action,
-            // Multi-table
-            multi_table::start_multi_table,
-            multi_table::pause_all_tables,
-            multi_table::get_table_status,
+            // Window detection
+            window_detector::find_poker_tables,
+            // Bot controller
+            bot_controller::start_bot,
+            bot_controller::stop_bot,
+            bot_controller::pause_bot,
+            bot_controller::resume_bot,
+            bot_controller::get_bot_status,
+            bot_controller::update_bot_config,
+            bot_controller::get_bot_config,
+            // Multi-table (legacy — keep for compat)
+            crate::multi_table::start_multi_table,
+            crate::multi_table::pause_all_tables,
+            crate::multi_table::get_table_status,
             // Session recording
             session_recorder::start_recording,
             session_recorder::record_hand,

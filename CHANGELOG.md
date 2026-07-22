@@ -2,6 +2,30 @@
 
 All notable changes to PokerBot will be documented in this file.
 
+## [1.1.0] — 2026-07-21
+
+### Added
+- **Auto-Play Loop** — Rust background thread per PokerStars table: continuous capture → detect → decide → click loop
+- **Window Detection** — Auto-scan for PokerStars table windows via Win32 EnumWindows API
+- **PokerStars Card Reading** — Pixel-based rank + suit recognition from table screenshots
+- **Decision Engine** — Simple heuristic hand evaluation (pairs/trips/connected/suited) with configurable aggression and bluff frequency
+- **Multi-Table Support** — Independent bot threads per table, coordinated via Tauri events
+- **Real-Time Dashboard** — Win rate (bb/100), P&L per table, hands played, current state
+- **Table Manager UI** — Detect, select, and start bot on specific PokerStars tables
+- **Config Controls** — Skill level, aggression, bluff frequency, reaction time sliders
+- **Bot Status Events** — Rust → React real-time status push via Tauri event system
+- **Profit Tracking** — Stack-based profit/loss per hand, win rate calculation
+
+### Changed
+- Desktop app rebranded to PokerBot (internal packages stay @pokertrainer)
+- Screen capture: added internal API (no Tauri dependency) for bot thread usage
+- Input simulation: added `execute_poker_action_internal` for bot thread calls
+- React frontend: complete rewrite — dashboard-first layout with live bot monitoring
+
+### Fixed
+- CoachTips rotation bug (refs to avoid effect re-running on state changes)
+- Raise slider minimum calculation (now uses `currentBet + Math.max(minRaise, lastRaiseAmount)`)
+
 ## [1.0.0] — 2026-07-16
 
 ### Added
