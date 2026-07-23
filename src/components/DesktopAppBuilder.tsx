@@ -9,14 +9,14 @@ import { Download, Package, AlertCircle, CheckCircle, Loader2, ExternalLink, Ter
 import { checkLatestRelease, downloadDesktopApp, getBuildInstructions } from '../utils/desktopAppBuilder';
 
 // Direct link to the latest release
-const LATEST_RELEASE_URL = 'https://github.com/s4lmon778/pokertrainer/releases/tag/v1.0.0';
-const WINDOWS_INSTALLER_URL = 'https://github.com/s4lmon778/pokertrainer/releases/download/v1.0.0/PokerTrainer_1.0.0_x64-setup.exe';
+const LATEST_RELEASE_URL = 'https://github.com/s4lmon778/pokertrainer/releases/tag/v1.2.0';
+const WINDOWS_INSTALLER_URL = 'https://github.com/s4lmon778/pokertrainer/releases/download/v1.2.0/PokerTrainer_1.2.0_x64-setup.exe';
 
 const DesktopAppBuilder: React.FC = () => {
   const [releaseInfo, setReleaseInfo] = useState<{ tag: string; url: string; assetName: string } | null>({
-    tag: 'v1.0.0',
+    tag: 'v1.2.0',
     url: WINDOWS_INSTALLER_URL,
-    assetName: 'PokerTrainer_1.0.0_x64-setup.exe',
+    assetName: 'PokerTrainer_1.2.0_x64-setup.exe',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
