@@ -129,6 +129,48 @@ extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     }
 }
 
+/// Info about a detected browser poker table (from extension).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BrowserTableInfo {
+    pub table_id: String,
+    pub site_name: String,
+    pub url: String,
+    pub title: String,
+    pub client_type: String, // "browser"
+}
+
+/// Scan for browser poker tables (from browser extension bridge).
+/// Merges with desktop table results for unified view.
+#[tauri::command]
+pub fn find_browser_tables() -> Result<Vec<BrowserTableInfo>, String> {
+    let table_ids = crate::browser_bridge::list_browser_tables();
+    let mut results = Vec::new();
+
+    for tid in &table_ids {
+        let state = crate::browser_bridge::read_latest_state(tid);
+        if let Some(bs) = state {
+            results.push(BrowserTableInfo {
+                table_id: tid.clone(),
+                site_name: bs.site_name.clone(),
+                url: bs.url.clone(),
+                title: format!("{} — {}", bs.site_name, bs.url),
+                client_type: "browser".to_string(),
+            });
+        } else {
+            // Table registered but no state yet
+            results.push(BrowserTableInfo {
+                table_id: tid.clone(),
+                site_name: "unknown".to_string(),
+                url: "".to_string(),
+                title: tid.clone(),
+                client_type: "browser".to_string(),
+            });
+        }
+    }
+
+    Ok(results)
+}
+
 /// Scan the desktop for poker table windows (PokerStars + ACR).
 /// Runs in a spawned thread so it doesn't block the IPC handler.
 #[tauri::command]

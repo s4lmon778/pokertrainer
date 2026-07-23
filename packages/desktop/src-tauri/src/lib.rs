@@ -7,6 +7,8 @@ mod table_scanner;
 mod bot_controller;
 mod multi_table;
 mod session_recorder;
+mod browser_bridge;
+mod site_registry;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -33,8 +35,10 @@ pub fn run() {
             input_simulator::execute_poker_action,
             // Window detection
             window_detector::find_poker_tables,
+            window_detector::find_browser_tables,
             // Bot controller
             bot_controller::start_bot,
+            bot_controller::start_browser_bot,
             bot_controller::stop_bot,
             bot_controller::pause_bot,
             bot_controller::resume_bot,
@@ -49,6 +53,10 @@ pub fn run() {
             session_recorder::start_recording,
             session_recorder::record_hand,
             session_recorder::stop_recording,
+            // Browser bridge
+            browser_bridge::init_bridge_cmd,
+            browser_bridge::get_bridge_port_cmd,
+            browser_bridge::list_browser_tables_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PokerBot");

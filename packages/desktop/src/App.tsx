@@ -12,6 +12,12 @@ import {
 interface TableWindow {
   hwnd: number; title: string; x: number; y: number;
   width: number; height: number; is_active: boolean;
+  client_type: string;
+}
+
+interface BrowserTable {
+  table_id: string; site_name: string; url: string;
+  title: string; client_type: string;
 }
 
 interface BotTableStatus {
@@ -39,14 +45,17 @@ const App: React.FC = () => {
     min_reaction_ms: 800, max_reaction_ms: 3000,
     auto_fold_weak: true, max_tables: 4,
   });
+  const [browserTables, setBrowserTables] = useState<BrowserTable[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [bridgePort, setBridgePort] = useState<number>(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load config on mount
+  // Load config + init bridge on mount
   useEffect(() => {
     invoke<BotConfig>('get_bot_config').then(setConfig).catch(() => {});
+    invoke<number>('init_bridge_cmd').then(port => setBridgePort(port)).catch(() => {});
   }, []);
 
   // Listen for bot-status events from Rust
@@ -57,7 +66,7 @@ const App: React.FC = () => {
     return () => { unlisten.then(f => f()); };
   }, []);
 
-  // Poll bot status every 2s; scan windows every 5s (less frequent)
+  // Poll bot status every 2s; scan windows + browser tables every 5s
   useEffect(() => {
     const pollStatus = async () => {
       try {
@@ -70,6 +79,10 @@ const App: React.FC = () => {
       try {
         const windows: TableWindow[] = await invoke('find_poker_tables');
         setDetectedWindows(windows);
+      } catch { /* ignore */ }
+      try {
+        const browser: BrowserTable[] = await invoke('find_browser_tables');
+        setBrowserTables(browser);
       } catch { /* ignore */ }
     };
     pollStatus();
@@ -86,7 +99,7 @@ const App: React.FC = () => {
     try {
       const windows: TableWindow[] = await invoke('find_poker_tables');
       if (windows.length === 0) {
-        setStartError('No PokerStars tables detected. Open a table first, then try again.');
+        setStartError('No poker tables detected. Open a PokerStars/ACR table or browser poker site first.');
         setIsStarting(false);
         return;
       }
@@ -134,7 +147,7 @@ const App: React.FC = () => {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1 className="sidebar-title">♠ PokerBot</h1>
-          <p className="sidebar-version">Desktop v1.1.0</p>
+          <p className="sidebar-version">Desktop v1.2.0</p>
         </div>
         <nav className="sidebar-nav">
           {tabs.map(tab => (
@@ -176,11 +189,16 @@ const App: React.FC = () => {
         {activeTab === 'tables' && (
           <TablesPanel
             detectedWindows={detectedWindows}
+            browserTables={browserTables}
             botTables={botTables}
             onRefreshWindows={async () => {
               try {
                 const w: TableWindow[] = await invoke('find_poker_tables');
                 setDetectedWindows(w);
+              } catch { /* ignore */ }
+              try {
+                const b: BrowserTable[] = await invoke('find_browser_tables');
+                setBrowserTables(b);
               } catch { /* ignore */ }
             }}
           />
@@ -309,33 +327,50 @@ const TableStat: React.FC<{ label: string; value: string; color?: string }> = ({
 
 const TablesPanel: React.FC<{
   detectedWindows: TableWindow[];
+  browserTables: BrowserTable[];
   botTables: BotTableStatus[];
   onRefreshWindows: () => void;
-}> = ({ detectedWindows, botTables, onRefreshWindows }) => {
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+}> = ({ detectedWindows, browserTables, botTables, onRefreshWindows }) => {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const handleStartSelected = useCallback(async () => {
-    const wins = detectedWindows.filter((_, i) => selected.has(i));
-    if (wins.length === 0) return;
-    try { await invoke('start_bot', { windows: wins }); } catch { /* ignore */ }
-  }, [detectedWindows, selected]);
+    // Desktop tables
+    const deskWins = detectedWindows.filter((w, i) => selected.has(`desktop-${i}`));
+    if (deskWins.length > 0) {
+      try { await invoke('start_bot', { windows: deskWins }); } catch { /* ignore */ }
+    }
+    // Browser tables
+    for (const bt of browserTables) {
+      if (selected.has(`browser-${bt.table_id}`)) {
+        try {
+          await invoke('start_browser_bot', {
+            tableId: bt.table_id,
+            siteName: bt.site_name,
+            url: bt.url,
+          });
+        } catch { /* ignore */ }
+      }
+    }
+  }, [detectedWindows, browserTables, selected]);
 
-  const toggle = (i: number) => {
+  const toggle = (id: string) => {
     const next = new Set(selected);
-    if (next.has(i)) next.delete(i); else next.add(i);
+    if (next.has(id)) next.delete(id); else next.add(id);
     setSelected(next);
   };
+
+  const hasAnything = detectedWindows.length > 0 || browserTables.length > 0;
 
   return (
     <div className="panel">
       <div className="panel-header">
         <div>
           <h2 className="panel-title">Table Manager</h2>
-          <p className="panel-subtitle">Detect and manage PokerStars table windows.</p>
+          <p className="panel-subtitle">Detect and manage poker table windows + browser tabs.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-secondary" onClick={onRefreshWindows}>
-            <Search size={14} /> Scan Windows
+            <Search size={14} /> Scan All
           </button>
           <button className="btn btn-primary" onClick={handleStartSelected} disabled={selected.size === 0}>
             <Play size={14} /> Start Selected
@@ -343,33 +378,78 @@ const TablesPanel: React.FC<{
         </div>
       </div>
 
-      {detectedWindows.length === 0 ? (
+      {!hasAnything ? (
         <div className="empty-state">
-          <p>No PokerStars tables detected.</p>
-          <p className="empty-sub">Open PokerStars table windows, then click "Scan Windows".</p>
+          <p>No poker tables detected.</p>
+          <p className="empty-sub">Open PokerStars/ACR tables or a browser poker site, then click "Scan All".</p>
         </div>
       ) : (
-        <div className="window-grid">
-          {detectedWindows.map((w, i) => {
-            const isBot = botTables.some(t => t.table_id === w.title);
-            return (
-              <div
-                key={i}
-                className={`window-card ${selected.has(i) ? 'selected' : ''} ${isBot ? 'bot-running' : ''}`}
-                onClick={() => toggle(i)}
-              >
-                <div className="window-card-header">
-                  <input type="checkbox" checked={selected.has(i)} onChange={() => toggle(i)} />
-                  <span className={`badge badge-${isBot ? 'playing' : 'idle'}`}>
-                    {isBot ? 'Running' : 'Idle'}
-                  </span>
-                </div>
-                <p className="window-title">{w.title}</p>
-                <p className="window-dims">{w.width}×{w.height} @ ({w.x},{w.y})</p>
+        <>
+          {/* Desktop windows */}
+          {detectedWindows.length > 0 && (
+            <>
+              <h3 style={{ marginTop: '0.75rem', marginBottom: '0.5rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Desktop Windows
+              </h3>
+              <div className="window-grid">
+                {detectedWindows.map((w, i) => {
+                  const id = `desktop-${i}`;
+                  const isBot = botTables.some(t => t.table_id === w.title);
+                  return (
+                    <div
+                      key={id}
+                      className={`window-card ${selected.has(id) ? 'selected' : ''} ${isBot ? 'bot-running' : ''}`}
+                      onClick={() => toggle(id)}
+                    >
+                      <div className="window-card-header">
+                        <input type="checkbox" checked={selected.has(id)} onChange={() => toggle(id)} />
+                        <span className={`badge badge-${isBot ? 'playing' : 'idle'}`}>
+                          {isBot ? 'Running' : 'Idle'}
+                        </span>
+                      </div>
+                      <p className="window-title">{w.title}</p>
+                      <p className="window-dims">{w.width}×{w.height} @ ({w.x},{w.y})</p>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            </>
+          )}
+
+          {/* Browser tables */}
+          {browserTables.length > 0 && (
+            <>
+              <h3 style={{ marginTop: '0.75rem', marginBottom: '0.5rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Browser Tables
+              </h3>
+              <div className="window-grid">
+                {browserTables.map(bt => {
+                  const id = `browser-${bt.table_id}`;
+                  const isBot = botTables.some(t => t.table_id === bt.table_id);
+                  return (
+                    <div
+                      key={id}
+                      className={`window-card ${selected.has(id) ? 'selected' : ''} ${isBot ? 'bot-running' : ''}`}
+                      onClick={() => toggle(id)}
+                    >
+                      <div className="window-card-header">
+                        <input type="checkbox" checked={selected.has(id)} onChange={() => toggle(id)} />
+                        <span className={`badge badge-${isBot ? 'playing' : 'idle'}`}
+                          style={{ background: isBot ? '#22c55e' : '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '0.65rem' }}>
+                          {isBot ? 'Running' : 'Browser'}
+                        </span>
+                      </div>
+                      <p className="window-title">{bt.site_name}</p>
+                      <p className="window-dims" style={{ fontSize: '0.65rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {bt.url.length > 40 ? bt.url.slice(0, 40) + '…' : bt.url}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {botTables.length > 0 && (

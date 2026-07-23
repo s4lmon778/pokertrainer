@@ -7,6 +7,7 @@ use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
+use crate::browser_bridge;
 use crate::input_simulator;
 use crate::screen_capture;
 use crate::table_scanner::{self, Card, GamePhase, TableState};
@@ -253,6 +254,11 @@ pub fn start_bot_table(win: &TableWindowInfo, app: AppHandle) -> Result<(), Stri
         },
     );
 
+    // Drop the mutex guard BEFORE calling emit_all_status — it also locks BOT_INSTANCES.
+    // std::sync::Mutex is NOT reentrant; calling instances_lock() while the guard
+    // is still live deadlocks the current thread.
+    drop(instances);
+
     // Emit status update
     emit_all_status(&app);
 
@@ -401,15 +407,167 @@ fn run_one_cycle(win: &TableWindowInfo) -> Result<TableState, String> {
     Ok(state)
 }
 
+// ── Browser bot ──
+
+/// Start a bot thread for a browser-based table.
+fn start_browser_bot_table(table_id: &str, site_name: &str, url: &str, app: AppHandle) -> Result<(), String> {
+    let mut instances = instances_lock();
+    if instances.is_none() {
+        *instances = Some(HashMap::new());
+    }
+    let map = instances.as_mut().unwrap();
+
+    if map.contains_key(table_id) {
+        return Err(format!("Browser table '{}' is already running", table_id));
+    }
+
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let status = Arc::new(Mutex::new(TableBotStatus {
+        table_id: table_id.to_string(),
+        title: format!("{site_name} — {url}"),
+        status: "running".to_string(),
+        hands_played: 0,
+        profit_loss: 0.0,
+        current_state: "initializing".to_string(),
+        win_rate: 0.0,
+        started_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    }));
+    let sf = stop_flag.clone();
+    let st = status.clone();
+    let app_clone = app.clone();
+    let tid = table_id.to_string();
+
+    thread::spawn(move || {
+        browser_bot_loop(sf, st, app_clone, tid);
+    });
+
+    map.insert(
+        table_id.to_string(),
+        BotInstance { stop_flag, status },
+    );
+
+    drop(instances);
+    emit_all_status(&app);
+
+    Ok(())
+}
+
+/// Bot loop for browser tables: read state from bridge → decide → push action to bridge.
+fn browser_bot_loop(
+    stop_flag: Arc<AtomicBool>,
+    status: Arc<Mutex<TableBotStatus>>,
+    app: AppHandle,
+    table_id: String,
+) {
+    let mut hand_profits: Vec<f64> = Vec::new();
+    let mut prev_stack = 1000.0;
+    let mut last_phase = GamePhase::Unknown;
+    let mut acted_this_hand = false;
+
+    loop {
+        if stop_flag.load(Ordering::Relaxed) {
+            break;
+        }
+
+        // Read state pushed from browser extension
+        let browser_state = browser_bridge::read_latest_state(&table_id);
+
+        match browser_state {
+            Some(bs) => {
+                let table_state = browser_bridge::browser_state_to_table_state(&bs);
+
+                if let Ok(mut s) = status.lock() {
+                    s.current_state = format!("phase: {:?}", table_state.phase);
+                }
+
+                let hero_has_cards = table_state.hero_cards.len() >= 2
+                    && table_state.hero_cards.iter().any(|c| c.rank != "?");
+
+                if table_state.is_hero_turn && hero_has_cards && !acted_this_hand {
+                    let cfg = BOT_CONFIG.lock().expect("BOT_CONFIG poisoned").clone();
+                    let (action, amount) = decide_action(&table_state, &cfg);
+
+                    let reaction_ms = if cfg.min_reaction_ms < cfg.max_reaction_ms {
+                        cfg.min_reaction_ms
+                            + (fast_rand() % (cfg.max_reaction_ms - cfg.min_reaction_ms))
+                    } else {
+                        cfg.min_reaction_ms
+                    };
+
+                    thread::sleep(Duration::from_millis(reaction_ms));
+
+                    // Push action to browser bridge (extension polls it)
+                    match browser_bridge::push_action(&table_id, &action, amount) {
+                        Ok(()) => {
+                            acted_this_hand = true;
+                            if let Ok(mut s) = status.lock() {
+                                s.current_state = format!("acted: {action}");
+                            }
+                        }
+                        Err(e) => {
+                            if let Ok(mut s) = status.lock() {
+                                s.current_state = format!("action push failed: {e}");
+                            }
+                        }
+                    }
+                }
+
+                // Track hand profit
+                if table_state.phase == GamePhase::Preflop
+                    && last_phase != GamePhase::Preflop
+                    && acted_this_hand
+                {
+                    let hand_result = table_state.hero_stack - prev_stack;
+                    if hand_result != 0.0 {
+                        hand_profits.push(hand_result);
+                        if let Ok(mut s) = status.lock() {
+                            s.profit_loss += hand_result;
+                            s.hands_played += 1;
+                            if !hand_profits.is_empty() {
+                                let total: f64 = s.profit_loss;
+                                s.win_rate = (total / s.hands_played as f64) * 100.0;
+                            }
+                        }
+                    }
+                    prev_stack = table_state.hero_stack;
+                    acted_this_hand = false;
+                }
+
+                last_phase = table_state.phase.clone();
+            }
+            None => {
+                // No state from extension yet — idle wait
+                if let Ok(mut s) = status.lock() {
+                    s.current_state = "waiting for extension".to_string();
+                }
+            }
+        }
+
+        emit_all_status(&app);
+
+        let cycle_ms = 500 + (fast_rand() % 500);
+        thread::sleep(Duration::from_millis(cycle_ms));
+    }
+}
+
 // ── Tauri commands ──
 
-/// Start bot on all detected PokerStars tables.
+/// Start bot on all detected desktop poker tables.
 #[tauri::command]
 pub async fn start_bot(app: AppHandle, windows: Vec<TableWindowInfo>) -> Result<(), String> {
     for win in &windows {
         start_bot_table(win, app.clone())?;
     }
     Ok(())
+}
+
+/// Start bot on a browser-based poker table (connected via extension).
+#[tauri::command]
+pub async fn start_browser_bot(app: AppHandle, table_id: String, site_name: String, url: String) -> Result<(), String> {
+    start_browser_bot_table(&table_id, &site_name, &url, app)
 }
 
 /// Stop all bot instances.
